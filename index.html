@@ -286,7 +286,7 @@ body.partner-mode .coordinator-only { display: none !important; }
   <div class="sep"></div>
   <button class="tb-btn" onclick="toggleSidebar()">Sidebar</button>
   <div class="sep"></div>
-  <button class="tb-btn collab-live coordinator-only" id="goLiveBtn" onclick="goLive()">Go Live</button>
+  <button class="tb-btn collab-live coordinator-only" id="goLiveBtn" onclick="goLive()" style="display:none">Go Live</button>
   <button class="tb-btn collab-live coordinator-only" id="goOfflineBtn" onclick="goOffline()" style="display:none">Disconnect</button>
   <button class="tb-btn" id="copyLinkBtn" onclick="copyRoomLink()" style="display:none">Copy Link</button>
   <span id="collabStatus" class="collab-indicator offline">&#9675; Local</span>
@@ -1987,19 +1987,20 @@ if (getFirebaseConfig()) {
   loadFirebaseSDK().catch(() => {});
 }
 
-// Auto-join room from URL parameter
-if (urlRoomCode && getFirebaseConfig()) {
+// Auto-connect to Firebase if configured (coordinator or partner)
+if (getFirebaseConfig()) {
+  const roomCode = urlRoomCode || 'AION-2026';
   const savedName = localStorage.getItem('gantt_user_name');
   const savedOrg = localStorage.getItem('gantt_user_org');
   if (savedName && savedOrg) {
     // Returning user — auto-connect silently
     userName = savedName + ' @ ' + savedOrg;
-    setTimeout(() => goLive(userName, urlRoomCode), 300);
+    setTimeout(() => goLive(userName, roomCode), 300);
   } else {
     // First visit — show welcome modal
-    setTimeout(() => showWelcomeModal(urlRoomCode), 300);
+    setTimeout(() => showWelcomeModal(roomCode), 300);
   }
-} else if (isPartnerMode && !getFirebaseConfig()) {
+} else if (isPartnerMode) {
   toast('Firebase not configured \u2014 contact the coordinator');
 }
 
