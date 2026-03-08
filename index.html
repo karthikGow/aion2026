@@ -1548,8 +1548,8 @@ async function goLive(providedName, providedRoom) {
   } else if (!userName) {
     userName = localStorage.getItem('gantt_user_name');
     if (!userName) {
-      userName = prompt('Enter your name (e.g. "Karthik @ IHP"):', '');
-      if (!userName) return;
+      userName = 'User';
+
       localStorage.setItem('gantt_user_name', userName);
     }
   }
@@ -1561,8 +1561,8 @@ async function goLive(providedName, providedRoom) {
     const urlParams = new URLSearchParams(window.location.search);
     roomCode = urlParams.get('room');
     if (!roomCode) {
-      roomCode = prompt('Enter a room name:', 'AION-2026');
-      if (!roomCode) return;
+      roomCode = 'AION-2026';
+
     }
   }
 
@@ -1987,27 +1987,13 @@ if (getFirebaseConfig()) {
   loadFirebaseSDK().catch(() => {});
 }
 
-// Auto-connect to Firebase if configured (coordinator or partner)
+// Auto-connect to Firebase silently (no modals, no prompts)
 if (getFirebaseConfig()) {
   const roomCode = urlRoomCode || 'AION-2026';
-  const savedName = localStorage.getItem('gantt_user_name');
-  const savedOrg = localStorage.getItem('gantt_user_org');
-  if (savedName && savedOrg) {
-    // Returning user — auto-connect silently
-    userName = savedName + ' @ ' + savedOrg;
-    setTimeout(() => goLive(userName, roomCode), 300);
-  } else {
-    // First visit — show welcome modal
-    setTimeout(() => showWelcomeModal(roomCode), 300);
-  }
+  setTimeout(() => goLive('User', roomCode), 300);
 } else if (isPartnerMode) {
   toast('Firebase not configured \u2014 contact the coordinator');
 }
-
-// Allow Enter key to submit welcome modal
-document.getElementById('welcome-name').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') submitWelcomeModal();
-});
 </script>
 </body>
 </html>
