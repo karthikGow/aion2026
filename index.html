@@ -275,6 +275,7 @@ body.partner-mode .coordinator-only { display: none !important; }
   <button class="tb-btn" id="redoBtn" onclick="redo()" disabled>Redo</button>
   <div class="sep"></div>
   <button class="tb-btn export" onclick="exportPNG()">Export PNG</button>
+  <button class="tb-btn export" onclick="exportPrintPNG()">Export Print PNG</button>
   <button class="tb-btn export" onclick="exportLaTeX()">Export LaTeX</button>
   <div class="sep"></div>
   <button class="tb-btn" onclick="saveJSON()">Save JSON</button>
@@ -1752,6 +1753,275 @@ function exportPNG() {
       a.click();
       URL.revokeObjectURL(a.href);
       toast('PNG exported (4x scale)');
+    }, 'image/png');
+  };
+  img.src = url;
+}
+
+// =============================================================================
+// EXPORT PRINT-QUALITY PNG
+// =============================================================================
+function exportPrintPNG() {
+  // Print-optimized layout constants
+  const P = {
+    labelW: 320, rowH: 48, headerH: 70, phaseH: 36, monthW: 48, handleW: 6,
+    fonts: { task: 22, wp: 24, month: 20, phase: 22, title: 28, bar: 18, msId: 16, msLabel: 24, msTop: 14, barSpan: 16 }
+  };
+
+  const rows = totalRows();
+  const chartW = P.labelW + data.totalMonths * P.monthW + 20;
+  const chartH = P.phaseH + P.headerH + rows * P.rowH + 10;
+
+  // Build off-screen SVG
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+  svg.setAttribute('width', chartW);
+  svg.setAttribute('height', chartH);
+  svg.setAttribute('viewBox', `0 0 ${chartW} ${chartH}`);
+
+  function el(tag, attrs) {
+    const e = document.createElementNS('http://www.w3.org/2000/svg', tag);
+    if (attrs) Object.entries(attrs).forEach(([k,v]) => e.setAttribute(k, v));
+    return e;
+  }
+
+  // Defs
+  const defs = el('defs');
+  defs.innerHTML = `
+    <filter id="ps" x="-2%" y="-2%" width="104%" height="104%">
+      <feDropShadow dx="0.8" dy="0.8" stdDeviation="1.2" flood-opacity="0.3"/>
+    </filter>
+    <filter id="pts" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="0.8" stdDeviation="1" flood-color="rgba(0,0,0,0.7)" flood-opacity="0.7"/>
+    </filter>`;
+  svg.appendChild(defs);
+
+  // Background
+  svg.appendChild(el('rect', { x:0, y:0, width: chartW, height: chartH, fill: '#ffffff' }));
+
+  const yBase = P.phaseH + P.headerH;
+
+  // Phase backgrounds & labels
+  data.phases.forEach(ph => {
+    const x = P.labelW + (ph.start - 1) * P.monthW;
+    const w = (ph.end - ph.start + 1) * P.monthW;
+    svg.appendChild(el('rect', {
+      x, y: P.phaseH, width: w, height: chartH - P.phaseH,
+      fill: ph.color, opacity: 0.4
+    }));
+    const label = el('text', {
+      x: x + w/2, y: P.phaseH / 2 + 7,
+      'text-anchor': 'middle', 'font-size': P.fonts.phase + 'px',
+      'font-family': 'Segoe UI, sans-serif', 'font-weight': '600', fill: '#333'
+    });
+    label.textContent = ph.name;
+    svg.appendChild(label);
+  });
+
+  // Grid lines & month headers
+  for (let m = 1; m <= data.totalMonths; m++) {
+    const x = P.labelW + (m - 1) * P.monthW;
+    svg.appendChild(el('line', {
+      x1: x, y1: P.phaseH, x2: x, y2: chartH,
+      stroke: '#ddd', 'stroke-width': 0.5
+    }));
+    const mt = el('text', {
+      x: x + P.monthW/2, y: P.phaseH + P.headerH - 12,
+      'text-anchor': 'middle', 'font-size': P.fonts.month + 'px',
+      'font-family': 'Segoe UI, sans-serif', 'font-weight': '700', fill: '#555'
+    });
+    mt.textContent = m;
+    svg.appendChild(mt);
+  }
+  // Right border
+  svg.appendChild(el('line', {
+    x1: P.labelW + data.totalMonths * P.monthW, y1: P.phaseH,
+    x2: P.labelW + data.totalMonths * P.monthW, y2: chartH,
+    stroke: '#bbb', 'stroke-width': 0.5
+  }));
+  // Header bottom line
+  svg.appendChild(el('line', {
+    x1: 0, y1: yBase, x2: chartW, y2: yBase,
+    stroke: '#999', 'stroke-width': 1
+  }));
+
+  // Horizontal row grid lines
+  for (let r = 0; r <= rows; r++) {
+    svg.appendChild(el('line', {
+      x1: 0, y1: yBase + r * P.rowH, x2: chartW, y2: yBase + r * P.rowH,
+      stroke: '#eee', 'stroke-width': 0.5
+    }));
+  }
+
+  // Milestone vertical dashed lines
+  data.milestones.forEach(ms => {
+    const mx = P.labelW + (ms.month - 0.5) * P.monthW;
+    svg.appendChild(el('line', {
+      x1: mx, y1: P.phaseH, x2: mx, y2: chartH,
+      stroke: '#2C3E50', 'stroke-width': 1.5,
+      'stroke-dasharray': '10,6', opacity: 0.35
+    }));
+    const msTopLabel = el('text', {
+      x: mx, y: P.phaseH + 18,
+      'text-anchor': 'middle', 'font-size': P.fonts.msTop + 'px',
+      'font-family': 'Segoe UI, sans-serif', 'font-weight': '700',
+      fill: '#2C3E50', opacity: 0.6
+    });
+    msTopLabel.textContent = ms.id;
+    svg.appendChild(msTopLabel);
+  });
+
+  // Title
+  const title = el('text', {
+    x: chartW / 2, y: P.phaseH + 26,
+    'text-anchor': 'middle', 'font-size': P.fonts.title + 'px',
+    'font-family': 'Segoe UI, sans-serif', 'font-weight': '700', fill: '#2C3E50'
+  });
+  title.textContent = 'AION-CF Project Gantt Chart (M1\u2013M36)';
+  svg.appendChild(title);
+
+  // WPs & tasks
+  let rowIdx = 0;
+  data.workPackages.forEach((wp) => {
+    const wpStart = Math.min(...wp.tasks.map(t => t.start));
+    const wpEnd = Math.max(...wp.tasks.map(t => t.end));
+    const y = yBase + rowIdx * P.rowH;
+
+    // WP group bar
+    const gx = P.labelW + (wpStart - 1) * P.monthW;
+    const gw = (wpEnd - wpStart + 1) * P.monthW;
+    svg.appendChild(el('rect', {
+      x: gx, y: y + 5, width: gw, height: P.rowH - 10,
+      rx: 4, ry: 4,
+      fill: tintColor(wp.color, 70),
+      stroke: darkenColor(wp.color, 10),
+      'stroke-width': 1, filter: 'url(#ps)'
+    }));
+
+    // WP span label inside bar
+    const wpSpanText = el('text', {
+      x: gx + gw/2, y: y + P.rowH/2 + 5,
+      'text-anchor': 'middle', 'font-size': P.fonts.barSpan + 'px',
+      'font-family': 'Segoe UI, sans-serif', 'font-weight': '600',
+      fill: '#fff', filter: 'url(#pts)'
+    });
+    wpSpanText.textContent = `M${wpStart}\u2013M${wpEnd}`;
+    svg.appendChild(wpSpanText);
+
+    // WP label
+    const wpLabel = el('text', {
+      x: 10, y: y + P.rowH / 2 + 7,
+      'font-size': P.fonts.wp + 'px', 'font-family': 'Segoe UI, sans-serif',
+      'font-weight': '700', fill: wp.color
+    });
+    wpLabel.textContent = `${wp.id}: ${wp.name} (${wp.lead})`;
+    svg.appendChild(wpLabel);
+
+    rowIdx++;
+
+    // Tasks
+    wp.tasks.forEach((task) => {
+      const ty = yBase + rowIdx * P.rowH;
+      const tx = P.labelW + (task.start - 1) * P.monthW;
+      const tw = (task.end - task.start + 1) * P.monthW;
+      const taskDur = task.end - task.start + 1;
+
+      // Task bar
+      svg.appendChild(el('rect', {
+        x: tx, y: ty + 8, width: tw, height: P.rowH - 16,
+        rx: 4, ry: 4,
+        fill: tintColor(wp.color, 65),
+        stroke: darkenColor(wp.color, 10),
+        'stroke-width': 1, filter: 'url(#ps)'
+      }));
+
+      // Leader color stripe
+      const leaderColor = getPartnerColor(task.leader || wp.lead);
+      svg.appendChild(el('rect', {
+        x: tx + 2, y: ty + 10, width: 5, height: P.rowH - 20,
+        rx: 1, fill: leaderColor
+      }));
+
+      // Span text inside bar
+      if (taskDur > 3) {
+        const spanText = el('text', {
+          x: tx + tw/2, y: ty + P.rowH/2 + 5,
+          'text-anchor': 'middle', 'font-size': P.fonts.bar + 'px',
+          'font-family': 'Segoe UI, sans-serif',
+          fill: '#fff', filter: 'url(#pts)'
+        });
+        spanText.textContent = `M${task.start}\u2013M${task.end}`;
+        svg.appendChild(spanText);
+      }
+
+      // Task label
+      const leaderStr = task.leader ? ` (${task.leader})` : '';
+      const tLabel = el('text', {
+        x: 34, y: ty + P.rowH / 2 + 7,
+        'font-size': P.fonts.task + 'px', 'font-family': 'Segoe UI, sans-serif',
+        fill: '#444'
+      });
+      tLabel.textContent = `${task.id} ${task.name}${leaderStr}`;
+      svg.appendChild(tLabel);
+
+      rowIdx++;
+    });
+  });
+
+  // Milestones row
+  const msY = yBase + rowIdx * P.rowH;
+  const msLabel = el('text', {
+    x: 10, y: msY + P.rowH / 2 + 7,
+    'font-size': P.fonts.msLabel + 'px', 'font-family': 'Segoe UI, sans-serif',
+    'font-weight': '700', fill: '#2C3E50'
+  });
+  msLabel.textContent = 'Milestones';
+  svg.appendChild(msLabel);
+
+  data.milestones.forEach((ms) => {
+    const mx = P.labelW + (ms.month - 0.5) * P.monthW;
+    const my = msY + P.rowH / 2;
+    const sz = 14;
+
+    svg.appendChild(el('polygon', {
+      points: `${mx},${my-sz} ${mx+sz},${my} ${mx},${my+sz} ${mx-sz},${my}`,
+      fill: '#2C3E50', stroke: '#2C3E50', 'stroke-width': 1, filter: 'url(#ps)'
+    }));
+
+    const mLabel = el('text', {
+      x: mx, y: my - sz - 5,
+      'text-anchor': 'middle', 'font-size': P.fonts.msId + 'px',
+      'font-family': 'Segoe UI, sans-serif', 'font-weight': '700', fill: '#2C3E50'
+    });
+    mLabel.textContent = ms.id;
+    svg.appendChild(mLabel);
+  });
+
+  // Export to canvas at 4x
+  const svgData = new XMLSerializer().serializeToString(svg);
+  const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+  const url = URL.createObjectURL(svgBlob);
+
+  const scale = 4;
+  const canvas = document.createElement('canvas');
+  canvas.width = chartW * scale;
+  canvas.height = chartH * scale;
+  const ctx = canvas.getContext('2d');
+
+  const img = new Image();
+  img.onload = () => {
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    URL.revokeObjectURL(url);
+
+    canvas.toBlob((blob) => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'fig5_gantt_chart_print.png';
+      a.click();
+      URL.revokeObjectURL(a.href);
+      toast(`Print PNG exported (${canvas.width}\u00d7${canvas.height}px, 4x scale)`);
     }, 'image/png');
   };
   img.src = url;
