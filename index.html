@@ -1,0 +1,2012 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AION-CF Gantt Chart Editor</title>
+<style>
+:root {
+  --bg: #1a1a2e;
+  --surface: #16213e;
+  --surface2: #0f3460;
+  --text: #e0e0e0;
+  --text-dim: #8a8a9a;
+  --accent: #4fc3f7;
+  --accent2: #00bfa5;
+  --border: #2a3a5e;
+  --toolbar-bg: #0f1629;
+  --sidebar-bg: #12192e;
+  --danger: #ef5350;
+  --success: #66bb6a;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+/* ── Toolbar ── */
+#toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--toolbar-bg);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+#toolbar .sep { width: 1px; height: 24px; background: var(--border); margin: 0 4px; }
+.tb-btn {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 5px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+.tb-btn:hover { background: var(--accent); color: #000; }
+.tb-btn:active { transform: scale(0.97); }
+.tb-btn.danger:hover { background: var(--danger); color: #fff; }
+.tb-btn.export:hover { background: var(--success); color: #000; }
+.tb-btn.collab:hover { background: #ab47bc; color: #fff; }
+.tb-btn.collab-live { background: #2e7d32; color: #fff; border-color: #43a047; }
+.tb-btn.collab-live:hover { background: #388e3c; }
+.tb-btn:disabled { opacity: 0.4; cursor: default; }
+#toolbar label { font-size: 12px; color: var(--text-dim); }
+#zoomSlider { width: 80px; accent-color: var(--accent); }
+#zoomValue { font-size: 11px; color: var(--accent); min-width: 30px; }
+.tb-title { font-weight: 700; font-size: 14px; color: var(--accent); margin-right: 8px; }
+.collab-indicator {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 8px; border-radius: 12px; font-size: 11px; font-weight: 600;
+}
+.collab-indicator.live { background: #1b5e20; color: #66bb6a; }
+.collab-indicator.offline { background: var(--surface2); color: var(--text-dim); }
+body.partner-mode .coordinator-only { display: none !important; }
+/* ── Main layout ── */
+#main {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+/* ── Sidebar ── */
+#sidebar {
+  width: 260px;
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  flex-shrink: 0;
+  transition: width 0.2s;
+  padding: 10px;
+}
+#sidebar.collapsed { width: 0; padding: 0; overflow: hidden; }
+#sidebar h3 {
+  font-size: 13px;
+  color: var(--accent);
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 4px;
+}
+.sb-field { margin-bottom: 8px; }
+.sb-field label { display: block; font-size: 11px; color: var(--text-dim); margin-bottom: 2px; }
+.sb-field input, .sb-field select {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 4px 6px;
+  border-radius: 3px;
+  font-size: 12px;
+}
+.sb-field input[type="color"] { height: 28px; padding: 1px; cursor: pointer; }
+.sb-field input[type="number"] { width: 70px; }
+.sb-row { display: flex; gap: 8px; }
+.sb-row .sb-field { flex: 1; }
+#sb-none { color: var(--text-dim); font-size: 12px; padding: 20px 0; text-align: center; }
+.sb-delete {
+  background: var(--danger);
+  color: #fff;
+  border: none;
+  padding: 5px 10px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 11px;
+  margin-top: 6px;
+  width: 100%;
+}
+.sb-delete:hover { background: #c62828; }
+/* ── Chart area ── */
+#chart-area {
+  flex: 1;
+  overflow: auto;
+  position: relative;
+  background: #0d1117;
+}
+#chart-area svg {
+  display: block;
+}
+/* SVG interactive styles */
+.bar-body { cursor: grab; }
+.bar-body:active { cursor: grabbing; }
+.bar-handle { cursor: ew-resize; }
+.milestone-diamond { cursor: grab; }
+.bar-body:hover, .milestone-diamond:hover { filter: brightness(1.2); }
+.bar-body.selected, .milestone-diamond.selected { stroke-width: 2.5; stroke: #fff; }
+.wp-group { cursor: pointer; }
+.label-text { cursor: text; pointer-events: all; }
+/* ── Modal ── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.modal-overlay.hidden { display: none; }
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 20px;
+  min-width: 320px;
+  max-width: 400px;
+}
+.modal h3 { color: var(--accent); margin-bottom: 12px; font-size: 15px; }
+.modal .sb-field { margin-bottom: 10px; }
+.modal-btns { display: flex; gap: 8px; margin-top: 14px; justify-content: flex-end; }
+.modal-btns button {
+  padding: 6px 16px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  font-size: 12px;
+}
+.modal-btns .ok { background: var(--accent); color: #000; border: none; font-weight: 600; }
+.modal-btns .cancel { background: var(--surface2); color: var(--text); }
+/* ── Partner Modal ── */
+.partner-modal { min-width: 420px; max-width: 520px; max-height: 80vh; overflow-y: auto; }
+.partner-row {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+  padding: 6px 8px; background: var(--surface2); border-radius: 4px;
+}
+.partner-row input[type="text"] {
+  flex: 1; background: var(--bg); border: 1px solid var(--border);
+  color: var(--text); padding: 4px 6px; border-radius: 3px; font-size: 12px;
+}
+.partner-row input[type="color"] {
+  width: 36px; height: 28px; padding: 1px; border: 1px solid var(--border);
+  border-radius: 3px; cursor: pointer; background: transparent;
+}
+.partner-row .remove-partner {
+  background: var(--danger); color: #fff; border: none; width: 24px; height: 24px;
+  border-radius: 3px; cursor: pointer; font-size: 14px; line-height: 1;
+}
+.partner-row .remove-partner:hover { background: #c62828; }
+/* ── Firebase Wizard ── */
+.wizard-modal { min-width: 540px; max-width: 640px; max-height: 85vh; overflow-y: auto; }
+.wizard-step {
+  display: flex; gap: 12px; margin-bottom: 14px;
+  padding: 12px; background: var(--surface2); border-radius: 6px;
+}
+.step-number {
+  width: 28px; height: 28px; border-radius: 50%;
+  background: var(--accent); color: #000;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 14px; flex-shrink: 0;
+}
+.step-content { flex: 1; }
+.step-content h4 { color: var(--text); font-size: 13px; margin-bottom: 4px; }
+.step-content p { font-size: 11.5px; color: var(--text-dim); line-height: 1.5; }
+.step-content p strong { color: var(--text); }
+.step-content code { background: var(--bg); padding: 1px 4px; border-radius: 2px; font-size: 11px; color: var(--accent); }
+#firebase-config-input {
+  width: 100%; height: 100px; background: var(--bg); border: 1px solid var(--border);
+  color: var(--text); font-family: 'Consolas', monospace; font-size: 11px;
+  padding: 8px; border-radius: 4px; resize: vertical; margin-top: 6px;
+}
+#firebase-test-result { font-size: 12px; vertical-align: middle; }
+/* ── Presence Bar ── */
+#presence-bar {
+  display: none; padding: 4px 12px;
+  background: var(--toolbar-bg); border-top: 1px solid var(--border);
+  flex-shrink: 0; font-size: 11px; color: var(--text-dim);
+  align-items: center; gap: 8px;
+}
+#presence-bar.active { display: flex; }
+.presence-dot {
+  width: 8px; height: 8px; border-radius: 50%; display: inline-block;
+}
+.presence-user {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 1px 6px; background: var(--surface2); border-radius: 10px; margin-right: 4px;
+}
+/* ── Welcome Modal ── */
+.welcome-modal { min-width: 360px; max-width: 420px; }
+.welcome-modal h3 { font-size: 17px; margin-bottom: 16px; }
+.welcome-room-info {
+  margin-top: 12px; padding: 8px 12px;
+  background: var(--surface2); border-radius: 4px;
+  font-size: 12px; color: var(--text-dim);
+}
+.welcome-room-info strong { color: var(--accent); }
+/* toast */
+#toast {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  background: var(--surface2);
+  border: 1px solid var(--accent);
+  color: var(--text);
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  z-index: 2000;
+  opacity: 0;
+  transition: opacity 0.3s;
+  pointer-events: none;
+}
+#toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<!-- Toolbar -->
+<div id="toolbar">
+  <span class="tb-title">AION-CF Gantt Editor</span>
+  <div class="sep"></div>
+  <button class="tb-btn" onclick="addWP()">+ WP</button>
+  <button class="tb-btn" onclick="addTask()">+ Task</button>
+  <button class="tb-btn" onclick="addMilestone()">+ Milestone</button>
+  <div class="sep"></div>
+  <button class="tb-btn" onclick="editPhases()">Phases</button>
+  <button class="tb-btn" onclick="managePartners()">Partners</button>
+  <div class="sep"></div>
+  <button class="tb-btn" id="undoBtn" onclick="undo()" disabled>Undo</button>
+  <button class="tb-btn" id="redoBtn" onclick="redo()" disabled>Redo</button>
+  <div class="sep"></div>
+  <button class="tb-btn export" onclick="exportPNG()">Export PNG</button>
+  <button class="tb-btn export" onclick="exportLaTeX()">Export LaTeX</button>
+  <div class="sep"></div>
+  <button class="tb-btn" onclick="saveJSON()">Save JSON</button>
+  <button class="tb-btn" onclick="loadJSON()">Load JSON</button>
+  <div class="sep"></div>
+  <label>Zoom</label>
+  <input type="range" id="zoomSlider" min="20" max="60" value="36" oninput="setZoom(+this.value)">
+  <span id="zoomValue">36px</span>
+  <div class="sep"></div>
+  <button class="tb-btn" onclick="toggleSidebar()">Sidebar</button>
+  <div class="sep"></div>
+  <button class="tb-btn collab-live coordinator-only" id="goLiveBtn" onclick="goLive()">Go Live</button>
+  <button class="tb-btn collab-live coordinator-only" id="goOfflineBtn" onclick="goOffline()" style="display:none">Disconnect</button>
+  <button class="tb-btn" id="copyLinkBtn" onclick="copyRoomLink()" style="display:none">Copy Link</button>
+  <span id="collabStatus" class="collab-indicator offline">&#9675; Local</span>
+</div>
+
+<!-- Main -->
+<div id="main">
+  <div id="sidebar">
+    <div id="sb-none">Click an element to edit</div>
+    <div id="sb-content" style="display:none"></div>
+  </div>
+  <div id="chart-area">
+    <svg id="chart-svg"></svg>
+  </div>
+</div>
+
+<!-- Presence Bar -->
+<div id="presence-bar"></div>
+
+<!-- Generic Modal -->
+<div id="modal-overlay" class="modal-overlay hidden">
+  <div class="modal" id="modal"></div>
+</div>
+
+<!-- Partner Modal -->
+<div id="partner-modal-overlay" class="modal-overlay hidden">
+  <div class="modal partner-modal" id="partner-modal">
+    <h3>Manage Partners</h3>
+    <div id="partner-list"></div>
+    <button class="tb-btn" onclick="addPartnerRow()" style="margin-top:8px;width:100%">+ Add Partner</button>
+    <div class="modal-btns">
+      <button class="cancel" onclick="closePartnerModal()">Cancel</button>
+      <button class="ok" onclick="savePartners()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Firebase Wizard Modal -->
+<div id="firebase-wizard-overlay" class="modal-overlay hidden">
+  <div class="modal wizard-modal">
+    <h3>Setup Firebase for Real-Time Collaboration</h3>
+    <div class="wizard-steps">
+      <div class="wizard-step">
+        <div class="step-number">1</div>
+        <div class="step-content">
+          <h4>Create a Firebase Project</h4>
+          <p>Go to <strong>console.firebase.google.com</strong><br>
+          &rarr; Click "Create a project" (or "Add project")<br>
+          &rarr; Name it anything, e.g. <code>aion-cf-gantt</code><br>
+          &rarr; Disable Google Analytics (not needed) &rarr; Create</p>
+        </div>
+      </div>
+      <div class="wizard-step">
+        <div class="step-number">2</div>
+        <div class="step-content">
+          <h4>Register a Web App</h4>
+          <p>In Firebase console &rarr; gear icon &rarr; "Project settings"<br>
+          &rarr; Scroll to "Your apps" &rarr; Click the <strong>&lt;/&gt;</strong> (Web) icon<br>
+          &rarr; App nickname: <code>gantt-editor</code> &rarr; Click "Register app"<br>
+          &rarr; You'll see a code block with <code>firebaseConfig = {...}</code><br>
+          &rarr; Copy the entire <code>{...}</code> block (just the curly braces part)</p>
+        </div>
+      </div>
+      <div class="wizard-step">
+        <div class="step-number">3</div>
+        <div class="step-content">
+          <h4>Paste Your Config</h4>
+          <textarea id="firebase-config-input" placeholder='Paste your Firebase config JSON here, e.g.:
+{
+  "apiKey": "AIza...",
+  "authDomain": "my-project.firebaseapp.com",
+  "databaseURL": "https://my-project-default-rtdb.firebaseio.com",
+  "projectId": "my-project",
+  "storageBucket": "my-project.appspot.com",
+  "messagingSenderId": "123456789",
+  "appId": "1:123:web:abc"
+}'></textarea>
+          <div style="margin-top:8px;display:flex;align-items:center;gap:8px">
+            <button class="tb-btn" onclick="testFirebaseConfig()">Test Connection</button>
+            <span id="firebase-test-result"></span>
+          </div>
+        </div>
+      </div>
+      <div class="wizard-step">
+        <div class="step-number">4</div>
+        <div class="step-content">
+          <h4>Create Realtime Database</h4>
+          <p>Back in Firebase console &rarr; left sidebar &rarr; "Build" &rarr; "Realtime Database"<br>
+          &rarr; Click "Create Database" &rarr; Choose any location &rarr; Next<br>
+          &rarr; Select <strong>"Start in TEST MODE"</strong> &rarr; Enable<br>
+          <em style="font-size:10px">(Test mode allows open read/write for 30 days &mdash; fine for your project timeline)</em></p>
+        </div>
+      </div>
+      <div class="wizard-step">
+        <div class="step-number">5</div>
+        <div class="step-content">
+          <h4>You're All Set!</h4>
+          <p>Click <strong>"Go Live"</strong> in the toolbar &rarr; Enter a room name (e.g. <code>AION-2026</code>) &rarr; Share the URL with partners.<br><br>
+          <strong>Sharing options:</strong><br>
+          &bull; <strong>GitHub Pages:</strong> Push this HTML to a repo, enable Pages &rarr; instant public URL<br>
+          &bull; <strong>Send the file:</strong> Email <code>gantt_editor.html</code> to partners &mdash; they open locally, click "Go Live" with the same room code, and edits sync via Firebase</p>
+        </div>
+      </div>
+    </div>
+    <div class="modal-btns">
+      <button class="cancel" onclick="closeFirebaseWizard()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Welcome/Join Modal -->
+<div id="welcome-modal-overlay" class="modal-overlay hidden">
+  <div class="modal welcome-modal">
+    <h3>AION-CF Gantt Editor</h3>
+    <div class="sb-field">
+      <label>Your name</label>
+      <input type="text" id="welcome-name" placeholder="e.g. Sarah">
+    </div>
+    <div class="sb-field">
+      <label>Organization</label>
+      <select id="welcome-org"></select>
+    </div>
+    <div class="welcome-room-info">
+      Joining room: <strong id="welcome-room-display"></strong>
+    </div>
+    <div class="modal-btns">
+      <button class="ok" onclick="submitWelcomeModal()">Join Session</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<!-- Hidden file inputs -->
+<input type="file" id="jsonInput" accept=".json" style="display:none" onchange="handleLoadJSON(this)">
+
+<script>
+// =============================================================================
+// FIREBASE CONFIGURATION (Coordinator: fill in once, partners never touch)
+// =============================================================================
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyBvSJg9lUpIliIiwx51X5S8t3bkJ50bfqs",
+  authDomain: "aion-cf-gantt.firebaseapp.com",
+  databaseURL: "https://aion-cf-gantt-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "aion-cf-gantt",
+  storageBucket: "aion-cf-gantt.firebasestorage.app",
+  messagingSenderId: "11787567258",
+  appId: "1:11787567258:web:b52be9436c67d6b7e7df23"
+};
+// Detect partner mode from URL
+const urlRoomCode = new URLSearchParams(window.location.search).get('room');
+const isPartnerMode = !!urlRoomCode;
+if (isPartnerMode) document.body.classList.add('partner-mode');
+
+// =============================================================================
+// DATA MODEL
+// =============================================================================
+function defaultData() {
+  return {
+    totalMonths: 36,
+    partners: [
+      { name: 'IHP',        color: '#1B4F72' },
+      { name: 'PW',         color: '#2E86C1' },
+      { name: 'Ceragon',    color: '#148F77' },
+      { name: 'Fraunhofer', color: '#D4AC0D' },
+      { name: 'Tectwin',    color: '#CB4335' },
+      { name: 'Sequans',    color: '#8E44AD' },
+    ],
+    phases: [
+      { name: 'Phase 1: Foundation',  start: 1,  end: 12, color: '#D5E8D4' },
+      { name: 'Phase 2: Development', start: 13, end: 24, color: '#DAE8FC' },
+      { name: 'Phase 3: Integration', start: 25, end: 33, color: '#FFF2CC' },
+      { name: 'Phase 4: Completion',  start: 34, end: 36, color: '#F8CECC' },
+    ],
+    workPackages: [
+      {
+        id: 'WP1', name: 'Management', lead: 'IHP', color: '#148F77',
+        tasks: [
+          { id: 'T1.1', name: 'Coordination', start: 1, end: 36, leader: 'IHP' },
+          { id: 'T1.2', name: 'Quality Assur.', start: 1, end: 36, leader: 'IHP' },
+          { id: 'T1.3', name: 'Dissemination', start: 1, end: 36, leader: 'IHP' },
+        ]
+      },
+      {
+        id: 'WP2', name: 'CF-mMIMO', lead: 'PW', color: '#2E86C1',
+        tasks: [
+          { id: 'T2.1', name: 'Architecture', start: 1, end: 12, leader: 'IHP' },
+          { id: 'T2.2', name: 'O-DU Impl.', start: 6, end: 24, leader: 'PW' },
+          { id: 'T2.3', name: 'Fronthaul', start: 9, end: 27, leader: 'Ceragon' },
+          { id: 'T2.4', name: 'CF Processing', start: 12, end: 30, leader: 'PW' },
+        ]
+      },
+      {
+        id: 'WP3', name: 'PINNs & AI PHY', lead: 'IHP', color: '#D4AC0D',
+        tasks: [
+          { id: 'T3.1', name: 'PINN Design', start: 1, end: 15, leader: 'IHP' },
+          { id: 'T3.2', name: 'FPGA Mapping', start: 6, end: 24, leader: 'IHP' },
+          { id: 'T3.3', name: 'dApp Framework', start: 12, end: 30, leader: 'Tectwin' },
+          { id: 'T3.4', name: 'AI PHY Replace', start: 6, end: 27, leader: 'Sequans' },
+        ]
+      },
+      {
+        id: 'WP4', name: 'Scheduling', lead: 'Ceragon', color: '#8E44AD',
+        tasks: [
+          { id: 'T4.1', name: 'Bayesian Sched.', start: 4, end: 21, leader: 'Ceragon' },
+          { id: 'T4.2', name: 'Power Mgmt', start: 6, end: 27, leader: 'Ceragon' },
+          { id: 'T4.3', name: 'Determ. Sched.', start: 9, end: 30, leader: 'Fraunhofer' },
+          { id: 'T4.4', name: 'xHaul Integ.', start: 12, end: 33, leader: 'Ceragon' },
+        ]
+      },
+      {
+        id: 'WP5', name: 'ISAC', lead: 'Fraunhofer', color: '#E67E22',
+        tasks: [
+          { id: 'T5.1', name: 'ISAC Waveform', start: 4, end: 21, leader: 'Fraunhofer' },
+          { id: 'T5.2', name: 'CF-MIMO Sensing', start: 9, end: 30, leader: 'Fraunhofer' },
+          { id: 'T5.3', name: 'Integration', start: 12, end: 33, leader: 'IHP' },
+        ]
+      },
+      {
+        id: 'WP6', name: 'Integration & PoC', lead: 'PW', color: '#CB4335',
+        tasks: [
+          { id: 'T6.1', name: 'Lab Testbed', start: 12, end: 30, leader: 'PW' },
+          { id: 'T6.2', name: 'E2E Integration', start: 15, end: 33, leader: 'PW' },
+          { id: 'T6.3', name: 'Field Trials', start: 21, end: 36, leader: 'Tectwin' },
+          { id: 'T6.4', name: 'Validation', start: 24, end: 36, leader: 'IHP' },
+        ]
+      },
+    ],
+    milestones: [
+      { id: 'MS1', name: 'Architecture Spec',       month: 3 },
+      { id: 'MS2', name: 'Baseline Implementation',  month: 6 },
+      { id: 'MS3', name: 'Prototype Ready',          month: 12 },
+      { id: 'MS4', name: 'Mid-term Review',          month: 18 },
+      { id: 'MS5', name: 'Integration Complete',     month: 24 },
+      { id: 'MS6', name: 'Field Trial Start',        month: 30 },
+      { id: 'MS7', name: 'Final Demonstration',      month: 36 },
+    ]
+  };
+}
+
+let data = defaultData();
+let selected = null;  // { type: 'task'|'wp'|'milestone', wpIdx, taskIdx, msIdx }
+let monthWidth = 36;
+const LABEL_W = 180;
+const HEADER_H = 50;
+const ROW_H = 28;
+const PHASE_HEADER_H = 22;
+const HANDLE_W = 6;
+
+// Undo/redo
+let undoStack = [];
+let redoStack = [];
+const MAX_UNDO = 50;
+
+function pushUndo() {
+  undoStack.push(JSON.stringify(data));
+  if (undoStack.length > MAX_UNDO) undoStack.shift();
+  redoStack = [];
+  updateUndoRedoBtns();
+}
+function undo() {
+  if (!undoStack.length) return;
+  redoStack.push(JSON.stringify(data));
+  data = JSON.parse(undoStack.pop());
+  selected = null;
+  render();
+  updateSidebar();
+  updateUndoRedoBtns();
+  syncToFirebase();
+}
+function redo() {
+  if (!redoStack.length) return;
+  undoStack.push(JSON.stringify(data));
+  data = JSON.parse(redoStack.pop());
+  selected = null;
+  render();
+  updateSidebar();
+  updateUndoRedoBtns();
+  syncToFirebase();
+}
+function updateUndoRedoBtns() {
+  document.getElementById('undoBtn').disabled = !undoStack.length;
+  document.getElementById('redoBtn').disabled = !redoStack.length;
+}
+
+// =============================================================================
+// PARTNER HELPERS
+// =============================================================================
+function getPartnerNames() {
+  return data.partners.map(p => p.name);
+}
+function getPartnerColor(name) {
+  const p = data.partners.find(p => p.name === name);
+  return p ? p.color : '#666666';
+}
+
+// Data migration for old JSON files or Firebase data
+function migrateData(d) {
+  if (!d.partners) {
+    d.partners = [
+      { name: 'IHP', color: '#1B4F72' }, { name: 'PW', color: '#2E86C1' },
+      { name: 'Ceragon', color: '#148F77' }, { name: 'Fraunhofer', color: '#D4AC0D' },
+      { name: 'Tectwin', color: '#CB4335' }, { name: 'Sequans', color: '#8E44AD' },
+    ];
+  }
+  if (d.workPackages) {
+    d.workPackages.forEach(wp => {
+      if (wp.tasks) {
+        wp.tasks.forEach(t => {
+          if (!t.leader) t.leader = wp.lead;
+        });
+      }
+    });
+  }
+}
+
+// =============================================================================
+// COLOR HELPERS
+// =============================================================================
+function hexToRgb(hex) {
+  const r = parseInt(hex.slice(1,3), 16);
+  const g = parseInt(hex.slice(3,5), 16);
+  const b = parseInt(hex.slice(5,7), 16);
+  return [r, g, b];
+}
+function rgbToHex(r, g, b) {
+  return '#' + [r,g,b].map(v => Math.max(0, Math.min(255, v)).toString(16).padStart(2,'0')).join('');
+}
+function tintColor(hex, pct) {
+  const [r,g,b] = hexToRgb(hex);
+  const f = pct / 100;
+  return rgbToHex(
+    Math.round(r * f + 255 * (1-f)),
+    Math.round(g * f + 255 * (1-f)),
+    Math.round(b * f + 255 * (1-f))
+  );
+}
+function darkenColor(hex, pct) {
+  const [r,g,b] = hexToRgb(hex);
+  const f = 1 - pct/100;
+  return rgbToHex(Math.round(r*f), Math.round(g*f), Math.round(b*f));
+}
+
+// =============================================================================
+// RENDERING
+// =============================================================================
+function totalRows() {
+  let n = 0;
+  data.workPackages.forEach(wp => { n += 1 + wp.tasks.length; });
+  n += 1; // milestones row
+  return n;
+}
+
+function render() {
+  const svg = document.getElementById('chart-svg');
+  const rows = totalRows();
+  const chartW = LABEL_W + data.totalMonths * monthWidth + 20;
+  const chartH = PHASE_HEADER_H + HEADER_H + rows * ROW_H + 10;
+  svg.setAttribute('width', chartW);
+  svg.setAttribute('height', chartH);
+  svg.setAttribute('viewBox', `0 0 ${chartW} ${chartH}`);
+  svg.innerHTML = '';
+
+  const defs = svgEl('defs');
+  defs.innerHTML = `
+    <filter id="shadow" x="-2%" y="-2%" width="104%" height="104%">
+      <feDropShadow dx="0.5" dy="0.5" stdDeviation="0.8" flood-opacity="0.3"/>
+    </filter>
+    <filter id="text-shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="0.5" stdDeviation="0.7" flood-color="rgba(0,0,0,0.7)" flood-opacity="0.7"/>
+    </filter>`;
+  svg.appendChild(defs);
+
+  // Background
+  svg.appendChild(svgEl('rect', { x:0, y:0, width: chartW, height: chartH, fill: '#ffffff' }));
+
+  const yBase = PHASE_HEADER_H + HEADER_H;
+
+  // Phase backgrounds
+  data.phases.forEach(ph => {
+    const x = LABEL_W + (ph.start - 1) * monthWidth;
+    const w = (ph.end - ph.start + 1) * monthWidth;
+    svg.appendChild(svgEl('rect', {
+      x, y: PHASE_HEADER_H, width: w, height: chartH - PHASE_HEADER_H,
+      fill: ph.color, opacity: 0.4
+    }));
+    const tx = x + w/2;
+    const label = svgEl('text', {
+      x: tx, y: PHASE_HEADER_H / 2 + 5,
+      'text-anchor': 'middle', 'font-size': '10px',
+      'font-family': 'Segoe UI, sans-serif', 'font-weight': '600', fill: '#333'
+    });
+    label.textContent = ph.name;
+    svg.appendChild(label);
+  });
+
+  // Grid lines & month headers
+  for (let m = 1; m <= data.totalMonths; m++) {
+    const x = LABEL_W + (m - 1) * monthWidth;
+    svg.appendChild(svgEl('line', {
+      x1: x, y1: PHASE_HEADER_H, x2: x, y2: chartH,
+      stroke: '#ddd', 'stroke-width': 0.5
+    }));
+    const mt = svgEl('text', {
+      x: x + monthWidth/2, y: PHASE_HEADER_H + HEADER_H - 8,
+      'text-anchor': 'middle', 'font-size': '9px',
+      'font-family': 'Segoe UI, sans-serif', 'font-weight': '700', fill: '#555'
+    });
+    mt.textContent = m;
+    svg.appendChild(mt);
+  }
+  // right border
+  svg.appendChild(svgEl('line', {
+    x1: LABEL_W + data.totalMonths * monthWidth, y1: PHASE_HEADER_H,
+    x2: LABEL_W + data.totalMonths * monthWidth, y2: chartH,
+    stroke: '#bbb', 'stroke-width': 0.5
+  }));
+  // header bottom line
+  svg.appendChild(svgEl('line', {
+    x1: 0, y1: yBase, x2: chartW, y2: yBase,
+    stroke: '#999', 'stroke-width': 1
+  }));
+
+  // Horizontal row grid lines
+  for (let r = 0; r <= rows; r++) {
+    svg.appendChild(svgEl('line', {
+      x1: 0, y1: yBase + r * ROW_H, x2: chartW, y2: yBase + r * ROW_H,
+      stroke: '#eee', 'stroke-width': 0.5
+    }));
+  }
+
+  // ── Milestone vertical dashed lines (behind bars) ──
+  data.milestones.forEach(ms => {
+    const mx = LABEL_W + (ms.month - 0.5) * monthWidth;
+    svg.appendChild(svgEl('line', {
+      x1: mx, y1: PHASE_HEADER_H, x2: mx, y2: chartH,
+      stroke: '#2C3E50', 'stroke-width': 1.5,
+      'stroke-dasharray': '6,4', opacity: 0.35
+    }));
+    // MS label at top of line
+    const msTopLabel = svgEl('text', {
+      x: mx, y: PHASE_HEADER_H + 12,
+      'text-anchor': 'middle', 'font-size': '7px',
+      'font-family': 'Segoe UI, sans-serif', 'font-weight': '700',
+      fill: '#2C3E50', opacity: 0.6
+    });
+    msTopLabel.textContent = ms.id;
+    svg.appendChild(msTopLabel);
+  });
+
+  // Title
+  const title = svgEl('text', {
+    x: chartW / 2, y: PHASE_HEADER_H + 16,
+    'text-anchor': 'middle', 'font-size': '13px',
+    'font-family': 'Segoe UI, sans-serif', 'font-weight': '700', fill: '#2C3E50'
+  });
+  title.textContent = 'AION-CF Project Gantt Chart (M1\u2013M36)';
+  svg.appendChild(title);
+
+  // ── Render WPs & tasks ──
+  let rowIdx = 0;
+  data.workPackages.forEach((wp, wpIdx) => {
+    const wpStart = Math.min(...wp.tasks.map(t => t.start));
+    const wpEnd = Math.max(...wp.tasks.map(t => t.end));
+    const y = yBase + rowIdx * ROW_H;
+
+    // WP group bar
+    const gx = LABEL_W + (wpStart - 1) * monthWidth;
+    const gw = (wpEnd - wpStart + 1) * monthWidth;
+    const isSelWP = selected && selected.type === 'wp' && selected.wpIdx === wpIdx;
+
+    const groupBar = svgEl('rect', {
+      x: gx, y: y + 3, width: gw, height: ROW_H - 6,
+      rx: 3, ry: 3,
+      fill: tintColor(wp.color, 70),
+      stroke: darkenColor(wp.color, 10),
+      'stroke-width': isSelWP ? 2.5 : 1,
+      filter: 'url(#shadow)',
+      class: 'wp-group'
+    });
+    if (isSelWP) groupBar.setAttribute('stroke', '#fff');
+    groupBar.addEventListener('click', (e) => {
+      e.stopPropagation();
+      selectElement({ type: 'wp', wpIdx });
+    });
+    svg.appendChild(groupBar);
+
+    // WP span label inside group bar
+    const wpSpanText = svgEl('text', {
+      x: gx + gw/2, y: y + ROW_H/2 + 3,
+      'text-anchor': 'middle', 'font-size': '8px',
+      'font-family': 'Segoe UI, sans-serif', 'font-weight': '600',
+      fill: '#fff', filter: 'url(#text-shadow)', 'pointer-events': 'none'
+    });
+    wpSpanText.textContent = `M${wpStart}\u2013M${wpEnd}`;
+    svg.appendChild(wpSpanText);
+
+    // WP label
+    const wpLabel = svgEl('text', {
+      x: 6, y: y + ROW_H / 2 + 4,
+      'font-size': '11px', 'font-family': 'Segoe UI, sans-serif',
+      'font-weight': '700', fill: wp.color, class: 'label-text'
+    });
+    wpLabel.textContent = `${wp.id}: ${wp.name} (${wp.lead})`;
+    wpLabel.addEventListener('dblclick', () => startInlineEdit(wpLabel, 'wp-name', wpIdx));
+    svg.appendChild(wpLabel);
+
+    rowIdx++;
+
+    // Tasks
+    wp.tasks.forEach((task, taskIdx) => {
+      const ty = yBase + rowIdx * ROW_H;
+      const tx = LABEL_W + (task.start - 1) * monthWidth;
+      const tw = (task.end - task.start + 1) * monthWidth;
+      const isSel = selected && selected.type === 'task' && selected.wpIdx === wpIdx && selected.taskIdx === taskIdx;
+      const taskDur = task.end - task.start + 1;
+
+      // Task bar — CHANGE 1: stronger colors (65% tint, darken stroke)
+      const bar = svgEl('rect', {
+        x: tx, y: ty + 5, width: tw, height: ROW_H - 10,
+        rx: 3, ry: 3,
+        fill: tintColor(wp.color, 65),
+        stroke: darkenColor(wp.color, 10),
+        'stroke-width': isSel ? 2.5 : 1,
+        filter: 'url(#shadow)',
+        class: 'bar-body'
+      });
+      if (isSel) bar.setAttribute('stroke', '#fff');
+
+      // Tooltip for narrow bars
+      if (taskDur <= 3) {
+        const ttl = svgEl('title');
+        ttl.textContent = `${task.id} ${task.name}: M${task.start}\u2013M${task.end}`;
+        bar.appendChild(ttl);
+      }
+
+      bar.addEventListener('mousedown', (e) => {
+        if (e.button !== 0) return;
+        e.stopPropagation();
+        selectElement({ type: 'task', wpIdx, taskIdx });
+        startDragMove(e, wpIdx, taskIdx);
+      });
+      bar.addEventListener('click', (e) => {
+        e.stopPropagation();
+        selectElement({ type: 'task', wpIdx, taskIdx });
+      });
+      svg.appendChild(bar);
+
+      // Leader color stripe on left edge
+      const leaderColor = getPartnerColor(task.leader || wp.lead);
+      svg.appendChild(svgEl('rect', {
+        x: tx + 1, y: ty + 6, width: 3, height: ROW_H - 12,
+        rx: 1, fill: leaderColor, 'pointer-events': 'none'
+      }));
+
+      // Month span label inside bar (CHANGE 3)
+      if (taskDur > 3) {
+        const spanText = svgEl('text', {
+          x: tx + tw/2, y: ty + ROW_H/2 + 3,
+          'text-anchor': 'middle', 'font-size': '8px',
+          'font-family': 'Segoe UI, sans-serif',
+          fill: '#fff', filter: 'url(#text-shadow)', 'pointer-events': 'none'
+        });
+        spanText.textContent = `M${task.start}\u2013M${task.end}`;
+        svg.appendChild(spanText);
+      }
+
+      // Left handle
+      const lh = svgEl('rect', {
+        x: tx, y: ty + 5, width: HANDLE_W, height: ROW_H - 10,
+        fill: 'transparent', class: 'bar-handle'
+      });
+      lh.addEventListener('mousedown', (e) => {
+        if (e.button !== 0) return;
+        e.stopPropagation();
+        selectElement({ type: 'task', wpIdx, taskIdx });
+        startDragResize(e, wpIdx, taskIdx, 'left');
+      });
+      svg.appendChild(lh);
+
+      // Right handle
+      const rh = svgEl('rect', {
+        x: tx + tw - HANDLE_W, y: ty + 5, width: HANDLE_W, height: ROW_H - 10,
+        fill: 'transparent', class: 'bar-handle'
+      });
+      rh.addEventListener('mousedown', (e) => {
+        if (e.button !== 0) return;
+        e.stopPropagation();
+        selectElement({ type: 'task', wpIdx, taskIdx });
+        startDragResize(e, wpIdx, taskIdx, 'right');
+      });
+      svg.appendChild(rh);
+
+      // Task label with leader (CHANGE 4)
+      const leaderStr = task.leader ? ` (${task.leader})` : '';
+      const tLabel = svgEl('text', {
+        x: 20, y: ty + ROW_H / 2 + 4,
+        'font-size': '10px', 'font-family': 'Segoe UI, sans-serif',
+        fill: '#444', class: 'label-text'
+      });
+      tLabel.textContent = `${task.id} ${task.name}${leaderStr}`;
+      tLabel.addEventListener('dblclick', () => startInlineEdit(tLabel, 'task-name', wpIdx, taskIdx));
+      svg.appendChild(tLabel);
+
+      rowIdx++;
+    });
+  });
+
+  // ── Milestones row ──
+  const msY = yBase + rowIdx * ROW_H;
+  const msLabel = svgEl('text', {
+    x: 6, y: msY + ROW_H / 2 + 4,
+    'font-size': '11px', 'font-family': 'Segoe UI, sans-serif',
+    'font-weight': '700', fill: '#2C3E50'
+  });
+  msLabel.textContent = 'Milestones';
+  svg.appendChild(msLabel);
+
+  data.milestones.forEach((ms, msIdx) => {
+    const mx = LABEL_W + (ms.month - 0.5) * monthWidth;
+    const my = msY + ROW_H / 2;
+    const sz = 8;
+    const isSel = selected && selected.type === 'milestone' && selected.msIdx === msIdx;
+
+    const diamond = svgEl('polygon', {
+      points: `${mx},${my-sz} ${mx+sz},${my} ${mx},${my+sz} ${mx-sz},${my}`,
+      fill: '#2C3E50',
+      stroke: isSel ? '#fff' : '#2C3E50',
+      'stroke-width': isSel ? 2.5 : 1,
+      filter: 'url(#shadow)',
+      class: 'milestone-diamond'
+    });
+    diamond.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return;
+      e.stopPropagation();
+      selectElement({ type: 'milestone', msIdx });
+      startDragMilestone(e, msIdx);
+    });
+    diamond.addEventListener('click', (e) => {
+      e.stopPropagation();
+      selectElement({ type: 'milestone', msIdx });
+    });
+    svg.appendChild(diamond);
+
+    // MS label above diamond
+    const mLabel = svgEl('text', {
+      x: mx, y: my - sz - 3,
+      'text-anchor': 'middle', 'font-size': '8px',
+      'font-family': 'Segoe UI, sans-serif', 'font-weight': '700', fill: '#2C3E50'
+    });
+    mLabel.textContent = ms.id;
+    svg.appendChild(mLabel);
+  });
+}
+
+function svgEl(tag, attrs) {
+  const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  if (attrs) Object.entries(attrs).forEach(([k,v]) => el.setAttribute(k, v));
+  return el;
+}
+
+// =============================================================================
+// SELECTION & SIDEBAR
+// =============================================================================
+function selectElement(sel) {
+  selected = sel;
+  render();
+  updateSidebar();
+}
+
+function updateSidebar() {
+  const none = document.getElementById('sb-none');
+  const content = document.getElementById('sb-content');
+  if (!selected) {
+    none.style.display = 'block';
+    content.style.display = 'none';
+    return;
+  }
+  none.style.display = 'none';
+  content.style.display = 'block';
+
+  const partnerOpts = getPartnerNames();
+
+  if (selected.type === 'wp') {
+    const wp = data.workPackages[selected.wpIdx];
+    content.innerHTML = `
+      <h3>${esc(wp.id)} Properties</h3>
+      <div class="sb-field"><label>Name</label><input id="sb-name" value="${esc(wp.name)}" onchange="sbUpdateWP('name', this.value)"></div>
+      <div class="sb-field"><label>Lead</label>
+        <select id="sb-lead" onchange="sbUpdateWP('lead', this.value)">
+          ${partnerOpts.map(p => `<option${p===wp.lead?' selected':''}>${esc(p)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="sb-field"><label>Color</label><input type="color" value="${wp.color}" onchange="sbUpdateWP('color', this.value)"></div>
+      <div class="sb-field"><label>Span</label><span style="font-size:12px">M${Math.min(...wp.tasks.map(t=>t.start))} \u2013 M${Math.max(...wp.tasks.map(t=>t.end))} (auto)</span></div>
+      <button class="sb-delete" onclick="deleteWP(${selected.wpIdx})">Delete WP</button>
+    `;
+  } else if (selected.type === 'task') {
+    const task = data.workPackages[selected.wpIdx].tasks[selected.taskIdx];
+    content.innerHTML = `
+      <h3>${esc(task.id)} Properties</h3>
+      <div class="sb-field"><label>Name</label><input value="${esc(task.name)}" onchange="sbUpdateTask('name', this.value)"></div>
+      <div class="sb-row">
+        <div class="sb-field"><label>Start (M)</label><input type="number" min="1" max="${data.totalMonths}" value="${task.start}" onchange="sbUpdateTask('start', +this.value)"></div>
+        <div class="sb-field"><label>End (M)</label><input type="number" min="1" max="${data.totalMonths}" value="${task.end}" onchange="sbUpdateTask('end', +this.value)"></div>
+      </div>
+      <div class="sb-field"><label>Duration</label><span style="font-size:12px">${task.end - task.start + 1} months</span></div>
+      <div class="sb-field"><label>Leader</label>
+        <select onchange="sbUpdateTask('leader', this.value)">
+          ${partnerOpts.map(p => `<option${p===(task.leader||'')?' selected':''}>${esc(p)}</option>`).join('')}
+        </select>
+      </div>
+      <button class="sb-delete" onclick="deleteTask(${selected.wpIdx}, ${selected.taskIdx})">Delete Task</button>
+    `;
+  } else if (selected.type === 'milestone') {
+    const ms = data.milestones[selected.msIdx];
+    content.innerHTML = `
+      <h3>${esc(ms.id)} Properties</h3>
+      <div class="sb-field"><label>Name</label><input value="${esc(ms.name)}" onchange="sbUpdateMS('name', this.value)"></div>
+      <div class="sb-field"><label>Month</label><input type="number" min="1" max="${data.totalMonths}" value="${ms.month}" onchange="sbUpdateMS('month', +this.value)"></div>
+      <button class="sb-delete" onclick="deleteMilestone(${selected.msIdx})">Delete Milestone</button>
+    `;
+  }
+}
+
+function sbUpdateWP(field, val) {
+  pushUndo();
+  data.workPackages[selected.wpIdx][field] = val;
+  render();
+  syncToFirebase();
+}
+function sbUpdateTask(field, val) {
+  pushUndo();
+  const task = data.workPackages[selected.wpIdx].tasks[selected.taskIdx];
+  task[field] = val;
+  if (field === 'start' && task.start > task.end) task.end = task.start;
+  if (field === 'end' && task.end < task.start) task.start = task.end;
+  render();
+  updateSidebar();
+  syncToFirebase();
+}
+function sbUpdateMS(field, val) {
+  pushUndo();
+  data.milestones[selected.msIdx][field] = val;
+  render();
+  updateSidebar();
+  syncToFirebase();
+}
+
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+
+// =============================================================================
+// DRAG INTERACTIONS
+// =============================================================================
+let drag = null;
+
+document.addEventListener('mousemove', (e) => {
+  if (!drag) return;
+  e.preventDefault();
+  const dx = e.clientX - drag.startX;
+  const dm = Math.round(dx / monthWidth);
+  if (dm === 0 && !drag.undoPushed) return;
+  if (!drag.undoPushed) { pushUndo(); drag.undoPushed = true; }
+
+  if (drag.mode === 'move') {
+    const task = data.workPackages[drag.wpIdx].tasks[drag.taskIdx];
+    const dur = drag.origEnd - drag.origStart;
+    let ns = drag.origStart + dm;
+    ns = Math.max(1, Math.min(data.totalMonths - dur, ns));
+    task.start = ns;
+    task.end = ns + dur;
+    render();
+    updateSidebar();
+    syncToFirebase();
+  } else if (drag.mode === 'resize-left') {
+    const task = data.workPackages[drag.wpIdx].tasks[drag.taskIdx];
+    let ns = drag.origStart + dm;
+    ns = Math.max(1, Math.min(task.end, ns));
+    task.start = ns;
+    render();
+    updateSidebar();
+    syncToFirebase();
+  } else if (drag.mode === 'resize-right') {
+    const task = data.workPackages[drag.wpIdx].tasks[drag.taskIdx];
+    let ne = drag.origEnd + dm;
+    ne = Math.max(task.start, Math.min(data.totalMonths, ne));
+    task.end = ne;
+    render();
+    updateSidebar();
+    syncToFirebase();
+  } else if (drag.mode === 'milestone') {
+    const ms = data.milestones[drag.msIdx];
+    let nm = drag.origMonth + dm;
+    nm = Math.max(1, Math.min(data.totalMonths, nm));
+    ms.month = nm;
+    render();
+    updateSidebar();
+    syncToFirebase();
+  }
+});
+
+document.addEventListener('mouseup', () => {
+  if (drag) { drag = null; }
+});
+
+function startDragMove(e, wpIdx, taskIdx) {
+  const task = data.workPackages[wpIdx].tasks[taskIdx];
+  drag = { mode: 'move', wpIdx, taskIdx, startX: e.clientX, origStart: task.start, origEnd: task.end, undoPushed: false };
+}
+function startDragResize(e, wpIdx, taskIdx, side) {
+  const task = data.workPackages[wpIdx].tasks[taskIdx];
+  drag = { mode: 'resize-' + side, wpIdx, taskIdx, startX: e.clientX, origStart: task.start, origEnd: task.end, undoPushed: false };
+}
+function startDragMilestone(e, msIdx) {
+  drag = { mode: 'milestone', msIdx, startX: e.clientX, origMonth: data.milestones[msIdx].month, undoPushed: false };
+}
+
+// =============================================================================
+// INLINE EDITING
+// =============================================================================
+function startInlineEdit(textEl, what, wpIdx, taskIdx) {
+  const bbox = textEl.getBBox();
+  const svg = document.getElementById('chart-svg');
+  const fo = document.createElementNS('http://www.w3.org/2000/svg', 'foreignObject');
+  fo.setAttribute('x', bbox.x - 2);
+  fo.setAttribute('y', bbox.y - 2);
+  fo.setAttribute('width', Math.max(LABEL_W - 10, bbox.width + 20));
+  fo.setAttribute('height', bbox.height + 8);
+
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.style.cssText = 'width:100%;height:100%;font-size:10px;font-family:Segoe UI,sans-serif;border:1px solid #4fc3f7;outline:none;padding:1px 3px;background:#fff;';
+
+  if (what === 'wp-name') {
+    input.value = data.workPackages[wpIdx].name;
+    input.addEventListener('blur', () => { pushUndo(); data.workPackages[wpIdx].name = input.value; svg.removeChild(fo); render(); syncToFirebase(); });
+  } else if (what === 'task-name') {
+    input.value = data.workPackages[wpIdx].tasks[taskIdx].name;
+    input.addEventListener('blur', () => { pushUndo(); data.workPackages[wpIdx].tasks[taskIdx].name = input.value; svg.removeChild(fo); render(); syncToFirebase(); });
+  }
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') input.blur(); if (e.key === 'Escape') { svg.removeChild(fo); render(); } });
+
+  fo.appendChild(input);
+  svg.appendChild(fo);
+  input.focus();
+  input.select();
+}
+
+// =============================================================================
+// ADD / DELETE OPERATIONS
+// =============================================================================
+function addWP() {
+  const nextNum = data.workPackages.length + 1;
+  const partners = getPartnerNames();
+  showModal('Add Work Package', [
+    { label: 'ID', id: 'wp-id', value: `WP${nextNum}` },
+    { label: 'Name', id: 'wp-name', value: '' },
+    { label: 'Lead', id: 'wp-lead', type: 'select', options: partners },
+    { label: 'Color', id: 'wp-color', type: 'color', value: data.partners[nextNum % data.partners.length]?.color || '#4fc3f7' },
+  ], (vals) => {
+    pushUndo();
+    data.workPackages.push({
+      id: vals['wp-id'], name: vals['wp-name'], lead: vals['wp-lead'], color: vals['wp-color'],
+      tasks: [{ id: `T${nextNum}.1`, name: 'New Task', start: 1, end: 12, leader: vals['wp-lead'] }]
+    });
+    render();
+    syncToFirebase();
+    toast('Added ' + vals['wp-id']);
+  });
+}
+
+function addTask() {
+  if (!selected || (selected.type !== 'wp' && selected.type !== 'task')) {
+    toast('Select a WP or task first');
+    return;
+  }
+  const wpIdx = selected.wpIdx;
+  const wp = data.workPackages[wpIdx];
+  const nextTask = wp.tasks.length + 1;
+  const wpNum = wp.id.replace('WP', '');
+  const partners = getPartnerNames();
+  showModal('Add Task to ' + wp.id, [
+    { label: 'ID', id: 't-id', value: `T${wpNum}.${nextTask}` },
+    { label: 'Name', id: 't-name', value: '' },
+    { label: 'Start Month', id: 't-start', type: 'number', value: 1, min: 1, max: data.totalMonths },
+    { label: 'End Month', id: 't-end', type: 'number', value: 12, min: 1, max: data.totalMonths },
+    { label: 'Leader', id: 't-leader', type: 'select', options: partners },
+  ], (vals) => {
+    pushUndo();
+    wp.tasks.push({ id: vals['t-id'], name: vals['t-name'], start: +vals['t-start'], end: +vals['t-end'], leader: vals['t-leader'] });
+    render();
+    syncToFirebase();
+    toast('Added ' + vals['t-id']);
+  });
+}
+
+function addMilestone() {
+  const nextNum = data.milestones.length + 1;
+  showModal('Add Milestone', [
+    { label: 'ID', id: 'ms-id', value: `MS${nextNum}` },
+    { label: 'Name', id: 'ms-name', value: '' },
+    { label: 'Month', id: 'ms-month', type: 'number', value: 1, min: 1, max: data.totalMonths },
+  ], (vals) => {
+    pushUndo();
+    data.milestones.push({ id: vals['ms-id'], name: vals['ms-name'], month: +vals['ms-month'] });
+    render();
+    syncToFirebase();
+    toast('Added ' + vals['ms-id']);
+  });
+}
+
+function deleteWP(wpIdx) {
+  if (!confirm(`Delete ${data.workPackages[wpIdx].id} and all its tasks?`)) return;
+  pushUndo();
+  data.workPackages.splice(wpIdx, 1);
+  selected = null;
+  render();
+  updateSidebar();
+  syncToFirebase();
+  toast('Work package deleted');
+}
+
+function deleteTask(wpIdx, taskIdx) {
+  pushUndo();
+  data.workPackages[wpIdx].tasks.splice(taskIdx, 1);
+  if (data.workPackages[wpIdx].tasks.length === 0) {
+    data.workPackages.splice(wpIdx, 1);
+  }
+  selected = null;
+  render();
+  updateSidebar();
+  syncToFirebase();
+  toast('Task deleted');
+}
+
+function deleteMilestone(msIdx) {
+  pushUndo();
+  data.milestones.splice(msIdx, 1);
+  selected = null;
+  render();
+  updateSidebar();
+  syncToFirebase();
+  toast('Milestone deleted');
+}
+
+// =============================================================================
+// EDIT PHASES
+// =============================================================================
+function editPhases() {
+  const fields = [];
+  data.phases.forEach((ph, i) => {
+    fields.push(
+      { label: `Phase ${i+1} Name`, id: `ph-name-${i}`, value: ph.name },
+      { label: `Start`, id: `ph-start-${i}`, type: 'number', value: ph.start, min: 1, max: data.totalMonths },
+      { label: `End`, id: `ph-end-${i}`, type: 'number', value: ph.end, min: 1, max: data.totalMonths },
+      { label: `Color`, id: `ph-color-${i}`, type: 'color', value: ph.color },
+    );
+  });
+  showModal('Edit Phases', fields, (vals) => {
+    pushUndo();
+    data.phases.forEach((ph, i) => {
+      ph.name = vals[`ph-name-${i}`];
+      ph.start = +vals[`ph-start-${i}`];
+      ph.end = +vals[`ph-end-${i}`];
+      ph.color = vals[`ph-color-${i}`];
+    });
+    render();
+    syncToFirebase();
+    toast('Phases updated');
+  });
+}
+
+// =============================================================================
+// PARTNER MANAGEMENT (CHANGE 5)
+// =============================================================================
+function managePartners() {
+  const overlay = document.getElementById('partner-modal-overlay');
+  renderPartnerList();
+  overlay.classList.remove('hidden');
+}
+
+function renderPartnerList() {
+  const list = document.getElementById('partner-list');
+  list.innerHTML = '';
+  data.partners.forEach((p, i) => {
+    const row = document.createElement('div');
+    row.className = 'partner-row';
+    row.innerHTML = `
+      <input type="text" value="${esc(p.name)}" data-idx="${i}" class="partner-name-input">
+      <input type="color" value="${p.color}" data-idx="${i}" class="partner-color-input">
+      <button class="remove-partner" onclick="removePartnerRow(${i})" title="Remove">&times;</button>
+    `;
+    list.appendChild(row);
+  });
+}
+
+function addPartnerRow() {
+  data.partners.push({ name: 'New Partner', color: '#4fc3f7' });
+  renderPartnerList();
+}
+
+function removePartnerRow(idx) {
+  const name = data.partners[idx].name;
+  const usage = isPartnerInUse(name);
+  if (usage) {
+    toast(`Cannot remove "${name}" \u2014 in use as ${usage}`);
+    return;
+  }
+  data.partners.splice(idx, 1);
+  renderPartnerList();
+}
+
+function isPartnerInUse(name) {
+  for (const wp of data.workPackages) {
+    if (wp.lead === name) return `lead of ${wp.id}`;
+    for (const t of wp.tasks) {
+      if (t.leader === name) return `leader of ${t.id}`;
+    }
+  }
+  return null;
+}
+
+function savePartners() {
+  // Read values from DOM inputs
+  const names = document.querySelectorAll('.partner-name-input');
+  const colors = document.querySelectorAll('.partner-color-input');
+  const newPartners = [];
+  const seen = new Set();
+  for (let i = 0; i < names.length; i++) {
+    const n = names[i].value.trim();
+    if (!n) continue;
+    if (seen.has(n)) { toast(`Duplicate partner name: "${n}"`); return; }
+    seen.add(n);
+    newPartners.push({ name: n, color: colors[i].value });
+  }
+  if (newPartners.length === 0) { toast('Need at least one partner'); return; }
+
+  // Check if any old partner names that were renamed are still in use
+  const oldNames = new Set(data.partners.map(p => p.name));
+  const newNames = new Set(newPartners.map(p => p.name));
+  for (const old of oldNames) {
+    if (!newNames.has(old)) {
+      const usage = isPartnerInUse(old);
+      if (usage) { toast(`Cannot remove/rename "${old}" \u2014 in use as ${usage}`); return; }
+    }
+  }
+
+  pushUndo();
+  data.partners = newPartners;
+  closePartnerModal();
+  render();
+  updateSidebar();
+  syncToFirebase();
+  toast('Partners updated');
+}
+
+function closePartnerModal() {
+  document.getElementById('partner-modal-overlay').classList.add('hidden');
+}
+
+// =============================================================================
+// MODAL (generic)
+// =============================================================================
+function showModal(title, fields, onOk) {
+  const overlay = document.getElementById('modal-overlay');
+  const modal = document.getElementById('modal');
+  let html = `<h3>${title}</h3>`;
+  fields.forEach(f => {
+    html += `<div class="sb-field"><label>${f.label}</label>`;
+    if (f.type === 'select') {
+      html += `<select id="m-${f.id}">${f.options.map(o => `<option>${esc(o)}</option>`).join('')}</select>`;
+    } else if (f.type === 'color') {
+      html += `<input type="color" id="m-${f.id}" value="${f.value || '#4fc3f7'}">`;
+    } else if (f.type === 'number') {
+      html += `<input type="number" id="m-${f.id}" value="${f.value}" min="${f.min||1}" max="${f.max||36}">`;
+    } else {
+      html += `<input type="text" id="m-${f.id}" value="${esc(f.value || '')}">`;
+    }
+    html += `</div>`;
+  });
+  html += `<div class="modal-btns"><button class="cancel" onclick="closeModal()">Cancel</button><button class="ok" id="modal-ok">OK</button></div>`;
+  modal.innerHTML = html;
+  overlay.classList.remove('hidden');
+  document.getElementById('modal-ok').addEventListener('click', () => {
+    const vals = {};
+    fields.forEach(f => { vals[f.id] = document.getElementById('m-' + f.id).value; });
+    closeModal();
+    onOk(vals);
+  });
+  const firstInput = modal.querySelector('input[type="text"]');
+  if (firstInput) setTimeout(() => firstInput.focus(), 50);
+}
+function closeModal() {
+  document.getElementById('modal-overlay').classList.add('hidden');
+}
+
+// =============================================================================
+// FIREBASE INTEGRATION (CHANGE 6)
+// =============================================================================
+let firebaseApp = null;
+let firebaseDb = null;
+let firebaseLoaded = false;
+let collabMode = false;
+let roomCode = null;
+let userName = null;
+let userId = null;
+let presenceRef = null;
+let dataRef = null;
+let syncTimeout = null;
+let localWriteInProgress = false;
+
+function getFirebaseConfig() {
+  // Check embedded config first (coordinator sets this once)
+  if (FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.projectId) {
+    return FIREBASE_CONFIG;
+  }
+  // Fall back to localStorage (legacy/wizard mode)
+  const stored = localStorage.getItem('gantt_firebase_config');
+  return stored ? JSON.parse(stored) : null;
+}
+function saveFirebaseConfigToStorage(config) {
+  localStorage.setItem('gantt_firebase_config', JSON.stringify(config));
+}
+
+function loadFirebaseSDK() {
+  return new Promise((resolve, reject) => {
+    if (firebaseLoaded) { resolve(); return; }
+    const s1 = document.createElement('script');
+    s1.src = 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js';
+    s1.onload = () => {
+      const s2 = document.createElement('script');
+      s2.src = 'https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js';
+      s2.onload = () => { firebaseLoaded = true; resolve(); };
+      s2.onerror = () => reject(new Error('Failed to load Firebase Database SDK'));
+      document.head.appendChild(s2);
+    };
+    s1.onerror = () => reject(new Error('Failed to load Firebase App SDK'));
+    document.head.appendChild(s1);
+  });
+}
+
+function setupFirebase() {
+  const overlay = document.getElementById('firebase-wizard-overlay');
+  // Pre-fill config if saved
+  const existing = getFirebaseConfig();
+  if (existing) {
+    setTimeout(() => {
+      const ta = document.getElementById('firebase-config-input');
+      if (ta) ta.value = JSON.stringify(existing, null, 2);
+    }, 50);
+  }
+  overlay.classList.remove('hidden');
+}
+function closeFirebaseWizard() {
+  document.getElementById('firebase-wizard-overlay').classList.add('hidden');
+}
+
+// ── Welcome Modal ──
+function showWelcomeModal(room) {
+  const select = document.getElementById('welcome-org');
+  select.innerHTML = data.partners.map(p =>
+    `<option value="${esc(p.name)}">${esc(p.name)}</option>`
+  ).join('');
+
+  const savedName = localStorage.getItem('gantt_user_name');
+  const savedOrg = localStorage.getItem('gantt_user_org');
+  if (savedName) document.getElementById('welcome-name').value = savedName;
+  if (savedOrg) {
+    const opt = [...select.options].find(o => o.value === savedOrg);
+    if (opt) opt.selected = true;
+  }
+
+  document.getElementById('welcome-room-display').textContent = room;
+  document.getElementById('welcome-modal-overlay').classList.remove('hidden');
+  setTimeout(() => document.getElementById('welcome-name').focus(), 50);
+}
+
+function closeWelcomeModal() {
+  document.getElementById('welcome-modal-overlay').classList.add('hidden');
+}
+
+function submitWelcomeModal() {
+  const name = document.getElementById('welcome-name').value.trim();
+  const org = document.getElementById('welcome-org').value;
+  if (!name) { toast('Please enter your name'); return; }
+
+  localStorage.setItem('gantt_user_name', name);
+  localStorage.setItem('gantt_user_org', org);
+
+  closeWelcomeModal();
+
+  const fullName = name + ' @ ' + org;
+  goLive(fullName, urlRoomCode);
+}
+
+async function testFirebaseConfig() {
+  const resultEl = document.getElementById('firebase-test-result');
+  const textarea = document.getElementById('firebase-config-input');
+  let config;
+
+  try {
+    let text = textarea.value.trim();
+    // Handle JavaScript-style objects (unquoted keys)
+    if (text.startsWith('{') && !text.includes('"apiKey"')) {
+      text = text.replace(/(\w+)\s*:/g, '"$1":').replace(/'/g, '"');
+    }
+    config = JSON.parse(text);
+  } catch (e) {
+    resultEl.innerHTML = '<span style="color:var(--danger)">Invalid JSON \u2014 copy the entire {...} block</span>';
+    return;
+  }
+
+  const required = ['apiKey', 'projectId'];
+  const missing = required.filter(k => !config[k]);
+  if (missing.length) {
+    resultEl.innerHTML = `<span style="color:var(--danger)">Missing: ${missing.join(', ')}</span>`;
+    return;
+  }
+
+  resultEl.innerHTML = '<span style="color:var(--accent)">Testing...</span>';
+
+  try {
+    await loadFirebaseSDK();
+    const testName = 'test-' + Date.now();
+    const testApp = firebase.initializeApp(config, testName);
+    const testDb = firebase.database(testApp);
+
+    await new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('Timeout \u2014 check databaseURL')), 6000);
+      testDb.ref('.info/connected').once('value', () => {
+        clearTimeout(timeout);
+        resolve();
+      }, (err) => {
+        clearTimeout(timeout);
+        reject(err);
+      });
+    });
+
+    testApp.delete();
+    saveFirebaseConfigToStorage(config);
+    resultEl.innerHTML = '<span style="color:var(--success)">\u2713 Connected! Config saved.</span>';
+  } catch (err) {
+    resultEl.innerHTML = `<span style="color:var(--danger)">\u2717 ${err.message}</span>`;
+  }
+}
+
+async function goLive(providedName, providedRoom) {
+  const config = getFirebaseConfig();
+  if (!config) {
+    toast('Firebase not configured');
+    if (!isPartnerMode) setupFirebase();
+    return;
+  }
+
+  // Resolve username
+  if (providedName) {
+    userName = providedName;
+  } else if (!userName) {
+    userName = localStorage.getItem('gantt_user_name');
+    if (!userName) {
+      userName = prompt('Enter your name (e.g. "Karthik @ IHP"):', '');
+      if (!userName) return;
+      localStorage.setItem('gantt_user_name', userName);
+    }
+  }
+
+  // Resolve room code
+  if (providedRoom) {
+    roomCode = providedRoom;
+  } else {
+    const urlParams = new URLSearchParams(window.location.search);
+    roomCode = urlParams.get('room');
+    if (!roomCode) {
+      roomCode = prompt('Enter a room name:', 'AION-2026');
+      if (!roomCode) return;
+    }
+  }
+
+  try {
+    toast('Connecting...');
+    await loadFirebaseSDK();
+
+    if (!firebaseApp) {
+      firebaseApp = firebase.initializeApp(config);
+    }
+    firebaseDb = firebase.database();
+
+    userId = 'user_' + Math.random().toString(36).substr(2, 9);
+    dataRef = firebaseDb.ref('/rooms/' + roomCode + '/data');
+    presenceRef = firebaseDb.ref('/rooms/' + roomCode + '/presence/' + userId);
+
+    // Determine partner color from user name (look for "@ Partner")
+    const atMatch = userName.match(/@\s*(.+)/);
+    const userPartner = atMatch ? atMatch[1].trim() : '';
+    const userColor = getPartnerColor(userPartner) || '#4fc3f7';
+
+    // Set presence
+    presenceRef.set({ name: userName, color: userColor, joinedAt: Date.now() });
+    presenceRef.onDisconnect().remove();
+
+    // Check if room has data
+    const snapshot = await dataRef.once('value');
+    if (!snapshot.exists()) {
+      // We're the first — upload current data
+      await dataRef.set(JSON.parse(JSON.stringify(data)));
+    } else {
+      // Load remote data
+      data = snapshot.val();
+      migrateData(data);
+      selected = null;
+      render();
+      updateSidebar();
+    }
+
+    // Listen for remote changes
+    dataRef.on('value', (snap) => {
+      if (localWriteInProgress) return;
+      const val = snap.val();
+      if (val) {
+        data = val;
+        migrateData(data);
+        render();
+        updateSidebar();
+      }
+    });
+
+    // Listen for presence changes
+    firebaseDb.ref('/rooms/' + roomCode + '/presence').on('value', (snap) => {
+      renderPresenceBar(snap.val());
+    });
+
+    collabMode = true;
+    updateCollabUI();
+
+    // Update URL
+    const url = new URL(window.location);
+    url.searchParams.set('room', roomCode);
+    window.history.replaceState({}, '', url);
+
+    toast('Connected to room: ' + roomCode);
+  } catch (err) {
+    toast('Error: ' + err.message);
+    console.error(err);
+  }
+}
+
+function goOffline() {
+  if (presenceRef) presenceRef.remove();
+  if (dataRef) dataRef.off();
+  if (firebaseDb && roomCode) {
+    firebaseDb.ref('/rooms/' + roomCode + '/presence').off();
+  }
+  collabMode = false;
+  roomCode = null;
+  dataRef = null;
+  presenceRef = null;
+  updateCollabUI();
+
+  // Clean URL
+  const url = new URL(window.location);
+  url.searchParams.delete('room');
+  window.history.replaceState({}, '', url);
+
+  toast('Disconnected \u2014 working locally');
+}
+
+function syncToFirebase() {
+  if (!collabMode || !dataRef) return;
+  clearTimeout(syncTimeout);
+  syncTimeout = setTimeout(() => {
+    localWriteInProgress = true;
+    dataRef.set(JSON.parse(JSON.stringify(data))).then(() => {
+      setTimeout(() => { localWriteInProgress = false; }, 500);
+    }).catch((err) => {
+      localWriteInProgress = false;
+      console.error('Sync error:', err);
+    });
+  }, 200);
+}
+
+function renderPresenceBar(presenceData) {
+  const bar = document.getElementById('presence-bar');
+  if (!presenceData || !collabMode) {
+    bar.innerHTML = '';
+    return;
+  }
+  const users = Object.values(presenceData);
+  let html = '<span style="font-weight:600;color:var(--success)">&#9679; Live</span> ';
+  html += users.map(u =>
+    `<span class="presence-user"><span class="presence-dot" style="background:${esc(u.color || '#4fc3f7')}"></span>${esc(u.name)}</span>`
+  ).join(' ');
+  html += ` <span style="color:var(--text-dim);margin-left:auto">${users.length} user${users.length !== 1 ? 's' : ''} in room</span>`;
+  bar.innerHTML = html;
+}
+
+function updateCollabUI() {
+  const goLiveBtn = document.getElementById('goLiveBtn');
+  const goOfflineBtn = document.getElementById('goOfflineBtn');
+  const copyLinkBtn = document.getElementById('copyLinkBtn');
+  const presenceBar = document.getElementById('presence-bar');
+  const collabStatus = document.getElementById('collabStatus');
+
+  if (collabMode) {
+    goLiveBtn.style.display = 'none';
+    goOfflineBtn.style.display = isPartnerMode ? 'none' : '';
+    copyLinkBtn.style.display = '';
+    presenceBar.classList.add('active');
+    collabStatus.className = 'collab-indicator live';
+    collabStatus.innerHTML = `&#9679; Live: ${esc(roomCode)}`;
+  } else {
+    goLiveBtn.style.display = isPartnerMode ? 'none' : '';
+    goOfflineBtn.style.display = 'none';
+    copyLinkBtn.style.display = 'none';
+    presenceBar.classList.remove('active');
+    collabStatus.className = 'collab-indicator offline';
+    collabStatus.innerHTML = '&#9675; Local';
+  }
+}
+
+function copyRoomLink() {
+  const url = new URL(window.location);
+  url.searchParams.set('room', roomCode);
+  navigator.clipboard.writeText(url.toString()).then(() => {
+    toast('Room link copied!');
+  }).catch(() => {
+    // Fallback
+    prompt('Copy this link:', url.toString());
+  });
+}
+
+// =============================================================================
+// EXPORT PNG
+// =============================================================================
+function exportPNG() {
+  const svg = document.getElementById('chart-svg');
+  const clone = svg.cloneNode(true);
+  clone.querySelectorAll('.bar-handle').forEach(el => el.remove());
+
+  const svgData = new XMLSerializer().serializeToString(clone);
+  const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+  const url = URL.createObjectURL(svgBlob);
+
+  const scale = 4;
+  const w = +svg.getAttribute('width');
+  const h = +svg.getAttribute('height');
+  const canvas = document.createElement('canvas');
+  canvas.width = w * scale;
+  canvas.height = h * scale;
+  const ctx = canvas.getContext('2d');
+
+  const img = new Image();
+  img.onload = () => {
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    URL.revokeObjectURL(url);
+
+    canvas.toBlob((blob) => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'fig5_gantt_chart.png';
+      a.click();
+      URL.revokeObjectURL(a.href);
+      toast('PNG exported (4x scale)');
+    }, 'image/png');
+  };
+  img.src = url;
+}
+
+// =============================================================================
+// EXPORT LaTeX
+// =============================================================================
+function exportLaTeX() {
+  const colorDefs = {};
+  const colorNames = {};
+  data.workPackages.forEach((wp, i) => {
+    const name = `WP${i+1}C`;
+    colorDefs[name] = wp.color;
+    colorNames[wp.id] = name;
+  });
+
+  let tex = `\\documentclass[border=5pt]{standalone}
+\\usepackage[utf8]{inputenc}
+\\usepackage{tikz}
+\\usepackage{xcolor}
+\\usepackage{pgfgantt}
+\\usetikzlibrary{arrows.meta}
+
+% Define colors
+\\definecolor{HDR}{HTML}{2C3E50}
+`;
+  data.phases.forEach((ph, i) => {
+    tex += `\\definecolor{Phase${i+1}}{HTML}{${ph.color.slice(1).toUpperCase()}}\n`;
+  });
+  Object.entries(colorDefs).forEach(([name, hex]) => {
+    tex += `\\definecolor{${name}}{HTML}{${hex.slice(1).toUpperCase()}}\n`;
+  });
+
+  tex += `
+\\begin{document}
+\\begin{tikzpicture}
+\\node[font=\\sffamily\\bfseries\\normalsize, text=HDR] at (11.5, 1.0) {AION-CF Project Gantt Chart (M1--M36)};
+\\end{tikzpicture}
+
+\\begin{ganttchart}[
+    x unit=0.52cm,
+    y unit title=0.55cm,
+    y unit chart=0.42cm,
+    hgrid,
+    vgrid={*1{gray!20}},
+    title height=1,
+    title label font=\\sffamily\\bfseries\\tiny,
+    title top shift=0.0,
+    bar height=0.6,
+    bar top shift=0.2,
+    bar label font=\\sffamily\\tiny,
+    group label font=\\sffamily\\scriptsize\\bfseries,
+    group top shift=0.15,
+    group height=0.7,
+    group peaks tip position=0,
+    milestone label font=\\sffamily\\tiny\\bfseries,
+    milestone height=0.5,
+    milestone top shift=0.25,
+    milestone inline label node/.append style={left=2mm, font=\\sffamily\\tiny},
+    link bulge=2,
+    link/.style={->, thick, HDR!60},
+    canvas/.append style={draw=gray!50}
+]{1}{${data.totalMonths}}
+
+% Phase labels
+`;
+  data.phases.forEach((ph, i) => {
+    const dur = ph.end - ph.start + 1;
+    const label = dur <= 4 ? ph.name.replace(/Phase \d+: /, 'Ph' + (i+1) + ' ') : ph.name;
+    tex += `\\gantttitle{\\textcolor{Phase${i+1}!80!black}{${label}}}{${dur}}\n`;
+  });
+  tex += `\\\\
+
+% Month labels
+\\gantttitlelist{1,...,${data.totalMonths}}{1} \\\\
+
+`;
+
+  data.workPackages.forEach((wp, wpIdx) => {
+    const cn = colorNames[wp.id];
+    const wpStart = Math.min(...wp.tasks.map(t => t.start));
+    const wpEnd = Math.max(...wp.tasks.map(t => t.end));
+    tex += `% === ${wp.id}: ${wp.name} ===\n`;
+    tex += `\\ganttgroup[group/.append style={fill=${cn}!70, draw=${cn}!90!black}]{${wp.id}: ${wp.name} (${wp.lead})}{${wpStart}}{${wpEnd}} \\\\\n`;
+    wp.tasks.forEach(task => {
+      // Include leader as comment
+      const leaderComment = task.leader ? ` % Leader: ${task.leader}` : '';
+      tex += `\\ganttbar[bar/.append style={fill=${cn}!30, draw=${cn}!70}]{${task.id} ${task.name}}{${task.start}}{${task.end}} \\\\${leaderComment}\n`;
+    });
+    tex += `\n`;
+  });
+
+  tex += `% === Milestones ===\n`;
+  data.milestones.forEach(ms => {
+    tex += `\\ganttmilestone[milestone/.append style={fill=HDR, draw=HDR, inner sep=1.5pt}]{${ms.id}}{${ms.month}}\n`;
+  });
+
+  tex += `
+\\end{ganttchart}
+\\end{document}
+`;
+
+  const blob = new Blob([tex], { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'fig5_gantt_chart.tex';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast('LaTeX exported (leaders in comments)');
+}
+
+// =============================================================================
+// JSON SAVE / LOAD
+// =============================================================================
+function saveJSON() {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'gantt_editor_state.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast('State saved to JSON');
+}
+function loadJSON() {
+  document.getElementById('jsonInput').click();
+}
+function handleLoadJSON(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const parsed = JSON.parse(e.target.result);
+      if (!Array.isArray(parsed.workPackages) || !Array.isArray(parsed.milestones) ||
+          !Array.isArray(parsed.phases) || typeof parsed.totalMonths !== 'number') {
+        toast('Error: JSON missing required fields (workPackages, milestones, phases, totalMonths)');
+        return;
+      }
+      pushUndo();
+      data = parsed;
+      migrateData(data);
+      selected = null;
+      render();
+      updateSidebar();
+      syncToFirebase();
+      toast('State loaded from JSON');
+    } catch (err) {
+      toast('Error: invalid JSON');
+    }
+  };
+  reader.readAsText(file);
+  input.value = '';
+}
+
+// =============================================================================
+// ZOOM
+// =============================================================================
+function setZoom(val) {
+  monthWidth = val;
+  document.getElementById('zoomValue').textContent = val + 'px';
+  render();
+}
+
+// =============================================================================
+// MISC
+// =============================================================================
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('collapsed');
+}
+
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+// Deselect on empty click
+document.getElementById('chart-area').addEventListener('click', (e) => {
+  if (e.target.tagName === 'svg' || e.target.classList.contains('chart-bg') ||
+      (e.target.tagName === 'rect' && !e.target.classList.contains('bar-body') &&
+       !e.target.classList.contains('bar-handle') && !e.target.classList.contains('wp-group'))) {
+    selected = null;
+    render();
+    updateSidebar();
+  }
+});
+
+// Keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
+  if (e.ctrlKey && e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
+  if (e.ctrlKey && e.key === 'z' && e.shiftKey) { e.preventDefault(); redo(); }
+  if (e.ctrlKey && e.key === 'y') { e.preventDefault(); redo(); }
+  if (e.key === 'Delete' && selected) {
+    if (selected.type === 'task') deleteTask(selected.wpIdx, selected.taskIdx);
+    else if (selected.type === 'milestone') deleteMilestone(selected.msIdx);
+    else if (selected.type === 'wp') deleteWP(selected.wpIdx);
+  }
+  if (e.ctrlKey && e.shiftKey && e.key === 'F') {
+    e.preventDefault();
+    setupFirebase();
+  }
+  if (e.key === 'Escape') {
+    selected = null; render(); updateSidebar();
+    closeModal();
+    closePartnerModal();
+    closeFirebaseWizard();
+    closeWelcomeModal();
+  }
+});
+
+// Ctrl+scroll zoom
+document.getElementById('chart-area').addEventListener('wheel', (e) => {
+  if (e.ctrlKey) {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? -2 : 2;
+    const newZoom = Math.max(20, Math.min(60, monthWidth + delta));
+    setZoom(newZoom);
+    document.getElementById('zoomSlider').value = newZoom;
+  }
+}, { passive: false });
+
+// =============================================================================
+// INIT
+// =============================================================================
+render();
+updateCollabUI();
+
+// Eager-load Firebase SDK if config exists (non-blocking)
+if (getFirebaseConfig()) {
+  loadFirebaseSDK().catch(() => {});
+}
+
+// Auto-join room from URL parameter
+if (urlRoomCode && getFirebaseConfig()) {
+  const savedName = localStorage.getItem('gantt_user_name');
+  const savedOrg = localStorage.getItem('gantt_user_org');
+  if (savedName && savedOrg) {
+    // Returning user — auto-connect silently
+    userName = savedName + ' @ ' + savedOrg;
+    setTimeout(() => goLive(userName, urlRoomCode), 300);
+  } else {
+    // First visit — show welcome modal
+    setTimeout(() => showWelcomeModal(urlRoomCode), 300);
+  }
+} else if (isPartnerMode && !getFirebaseConfig()) {
+  toast('Firebase not configured \u2014 contact the coordinator');
+}
+
+// Allow Enter key to submit welcome modal
+document.getElementById('welcome-name').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') submitWelcomeModal();
+});
+</script>
+</body>
+</html>
