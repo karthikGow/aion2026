@@ -1252,10 +1252,7 @@
       backdrop.classList.remove('visible');
     }
 
-    // Show modal on first load if no config saved
-    if (!savedConfig) {
-      showFirebaseModal();
-    }
+    // Firebase config is hardcoded — no modal needed on load
 
     connectBtn.addEventListener('click', () => {
       const raw = configInput.value.trim();
