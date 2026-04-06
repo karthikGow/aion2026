@@ -1218,15 +1218,19 @@
       }
     }
 
-    // Auto-connect with hardcoded config on load
-    const ok = initFirebase(FIREBASE_CONFIG);
-    if (ok) {
-      toast('Firebase connected', 'success');
-      loadGanttFromFirebase();
-      seedPMFirebase();
-      listenChat();
-      listenRates();
+    // Auto-connect DEFERRED — runs after all modules are declared
+    function autoConnectFirebase() {
+      const ok = initFirebase(FIREBASE_CONFIG);
+      if (ok) {
+        toast('Firebase connected', 'success');
+        loadGanttFromFirebase();
+        seedPMFirebase();
+        listenChat();
+        listenRates();
+      }
     }
+    // Defer to end of script execution so ganttData, pmData etc. are declared
+    setTimeout(autoConnectFirebase, 0);
 
     // ── Firebase Modal Logic ─────────────────────────────────────────────────
 
