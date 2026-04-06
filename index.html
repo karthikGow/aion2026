@@ -1194,9 +1194,19 @@
 
     let firebaseApp = null;
 
+    // Hardcoded Firebase config — no wizard needed for partners
+    const FIREBASE_CONFIG = {
+      apiKey: "AIzaSyBvSJg9lUpIliIiwx51X5S8t3bkJ50bfqs",
+      authDomain: "aion-cf-gantt.firebaseapp.com",
+      databaseURL: "https://aion-cf-gantt-default-rtdb.europe-west1.firebasedatabase.app",
+      projectId: "aion-cf-gantt",
+      storageBucket: "aion-cf-gantt.firebasestorage.app",
+      messagingSenderId: "11787567258",
+      appId: "1:11787567258:web:b52be9436c67d6b7e7df23"
+    };
+
     function initFirebase(config) {
       try {
-        // Prevent double-init
         if (firebaseApp) return true;
         firebaseApp = firebase.initializeApp(config);
         setFirebaseStatus(true);
@@ -1208,27 +1218,14 @@
       }
     }
 
-    // Auto-connect if config already saved
-    const savedConfig = localStorage.getItem('aion-cf-firebase');
-    if (savedConfig) {
-      try {
-        const cfg = JSON.parse(savedConfig);
-        const ok = initFirebase(cfg);
-        if (ok) {
-          toast('Firebase connected', 'success');
-          // Load Gantt data from Firebase after connection
-          loadGanttFromFirebase();
-          // Seed PM data if empty, then start realtime listener
-          seedPMFirebase();
-          // Start chat realtime listener
-          listenChat();
-          // Start budget rates realtime listener
-          listenRates();
-        }
-      } catch (e) {
-        console.warn('Saved Firebase config invalid, clearing.', e);
-        localStorage.removeItem('aion-cf-firebase');
-      }
+    // Auto-connect with hardcoded config on load
+    const ok = initFirebase(FIREBASE_CONFIG);
+    if (ok) {
+      toast('Firebase connected', 'success');
+      loadGanttFromFirebase();
+      seedPMFirebase();
+      listenChat();
+      listenRates();
     }
 
     // ── Firebase Modal Logic ─────────────────────────────────────────────────
