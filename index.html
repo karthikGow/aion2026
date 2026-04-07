@@ -1076,9 +1076,24 @@
       'T1.1': 8, 'T1.2': 3, 'T1.3': 4,
       'T2.1': 2, 'T2.2': 3, 'T2.3': 1, 'T2.4': 2,
       'T3.1': 6, 'T3.2': 3, 'T3.3': 3, 'T3.4': 8,
-      'T4.1': 7, 'T4.2': 4, 'T4.3': 4,
-      'T5.1': 6, 'T5.2': 7, 'T5.3': 4,
+      'T4.1': 7, 'T4.2': 6, 'T4.3': 2,
+      'T5.1': 8, 'T5.2': 3, 'T5.3': 2,
       'T6.1': 2, 'T6.2': 2,
+    };
+
+    // All known partner PM allocations (from proposal WP tables)
+    const ALL_PM_DEFAULTS = {
+      'T1.1': { IHP:8 }, 'T1.2': { IHP:3, CER:3 }, 'T1.3': { IHP:4 },
+      'T2.1': { CER:5, IHP:2, IIS:1, TEC:1, AIRP:1 },
+      'T2.2': { CER:1, IHP:3, IIS:1, AIRP:1 },
+      'T2.3': { CER:1, IHP:1, IIS:1, TEC:1, AIRP:1 },
+      'T2.4': { CER:5, IHP:2, AIRP:2 },
+      'T3.1': { IHP:6, TEC:2, AIRP:2 }, 'T3.2': { CER:3, IHP:3, TEC:1 },
+      'T3.3': { IHP:3, TEC:1, AIRP:3 }, 'T3.4': { CER:8, IHP:8, TEC:2, AIRP:6 },
+      'T4.1': { TEC:2, IHP:7, AIRP:3 }, 'T4.2': { TEC:2, IHP:6, AIRP:6 },
+      'T4.3': { TEC:3, IHP:2, AIRP:2 },
+      'T5.1': { IHP:8, AIRP:6 }, 'T5.2': { IHP:3, AIRP:6 }, 'T5.3': { IHP:2 },
+      'T6.1': { IHP:2 }, 'T6.2': { IHP:2 },
     };
 
     // ── Firebase helpers ──────────────────────────────────────────────────
@@ -2675,20 +2690,19 @@
     // Global PM data store: { 'T1.1': { 'IHP': 8, 'PW': 0, ... }, ... }
     let pmData = {};
 
-    // ── Initialize pmData from IHP_PM_DEFAULTS ──
+    // ── Initialize pmData from ALL_PM_DEFAULTS ──
     function initPMData() {
       // Try localStorage backup first (offline fallback)
       loadPMFromLocalStorage();
 
-      // Fill any missing cells with defaults
+      // Fill any missing cells with all known partner defaults
       ganttData.workPackages.forEach(wp => {
         wp.tasks.forEach(task => {
           if (!pmData[task.id]) pmData[task.id] = {};
+          const defaults = ALL_PM_DEFAULTS[task.id] || {};
           PARTNERS.forEach(p => {
             if (pmData[task.id][p.id] === undefined) {
-              pmData[task.id][p.id] = (p.id === 'IHP' && IHP_PM_DEFAULTS[task.id] !== undefined)
-                ? IHP_PM_DEFAULTS[task.id]
-                : 0;
+              pmData[task.id][p.id] = defaults[p.id] || 0;
             }
           });
         });
@@ -2933,7 +2947,7 @@
       }
     }
 
-    // ── Seed Firebase with IHP defaults if pm/ node is empty ──
+    // ── Seed Firebase with all known defaults if pm/ node is empty ──
     function seedPMFirebase() {
       if (!window.firebaseConnected) return;
       try {
@@ -2943,9 +2957,9 @@
             ganttData.workPackages.forEach(wp => {
               wp.tasks.forEach(task => {
                 seed[fbKey(task.id)] = {};
+                const defaults = ALL_PM_DEFAULTS[task.id] || {};
                 PARTNERS.forEach(p => {
-                  seed[fbKey(task.id)][p.id] = (p.id === 'IHP' && IHP_PM_DEFAULTS[task.id] !== undefined)
-                    ? IHP_PM_DEFAULTS[task.id] : 0;
+                  seed[fbKey(task.id)][p.id] = defaults[p.id] || 0;
                 });
               });
             });
@@ -2960,28 +2974,29 @@
       }
     }
 
-    // ── Reset to IHP defaults ──
+    // ── Reset to all known partner defaults ──
     function pmResetToDefaults() {
-      if (!confirm('Reset IHP to defaults and clear all other partners?')) return;
+      if (!confirm('Reset all partners to known defaults?')) return;
       ganttData.workPackages.forEach(wp => {
         wp.tasks.forEach(task => {
+          const defaults = ALL_PM_DEFAULTS[task.id] || {};
           PARTNERS.forEach(p => {
-            pmData[task.id][p.id] = (p.id === 'IHP' && IHP_PM_DEFAULTS[task.id] !== undefined)
-              ? IHP_PM_DEFAULTS[task.id] : 0;
+            pmData[task.id][p.id] = defaults[p.id] || 0;
           });
         });
       });
       updatePMGridFromData();
       recalcPMTotals();
+      savePMToLocalStorage();
       if (window.firebaseConnected) {
         try {
           const seed = {};
           ganttData.workPackages.forEach(wp => {
             wp.tasks.forEach(task => {
               seed[fbKey(task.id)] = {};
+              const defaults = ALL_PM_DEFAULTS[task.id] || {};
               PARTNERS.forEach(p => {
-                seed[fbKey(task.id)][p.id] = (p.id === 'IHP' && IHP_PM_DEFAULTS[task.id] !== undefined)
-                  ? IHP_PM_DEFAULTS[task.id] : 0;
+                seed[fbKey(task.id)][p.id] = defaults[p.id] || 0;
               });
             });
           });
