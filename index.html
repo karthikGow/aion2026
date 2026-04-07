@@ -2702,7 +2702,7 @@
               `data-task="${esc(task.id)}" data-partner="${esc(partner.id)}" ` +
               `min="0" step="0.5" value="${val > 0 ? val : ''}" ` +
               `placeholder="0" ` +
-              `oninput="onPMCellChange('${esc(task.id)}','${esc(partner.id)}',this.value)"></td>`;
+              `onchange="onPMCellChange('${esc(task.id)}','${esc(partner.id)}',this.value)"></td>`;
           });
           // WP subtotal (light tint of WP color)
           tbody += `<td class="pm-subtotal" id="pm-sub-${esc(wp.id)}-${esc(partner.id)}" ` +
@@ -2835,10 +2835,13 @@
     }
 
     // ── Firebase realtime listener ──
+    let pmFirebaseListener = null;
     function listenPMData() {
       if (!window.firebaseConnected) return;
+      // Detach old listener to prevent duplicates on reconnect
+      if (pmFirebaseListener) firebase.database().ref('pm').off('value', pmFirebaseListener);
       try {
-        firebase.database().ref('pm').on('value', (snap) => {
+        pmFirebaseListener = firebase.database().ref('pm').on('value', (snap) => {
           const fbData = snap.val();
           if (fbData) {
             Object.keys(fbData).forEach(fbTaskId => {
@@ -2998,7 +3001,7 @@
     function switchChatChannel(channel) {
       // Detach old listener
       if (chatListener && window.firebaseConnected) {
-        const oldPath = chatChannel === 'global' ? 'chat/global' : 'chat/tasks/' + chatChannel;
+        const oldPath = chatChannel === 'global' ? 'chat/global' : 'chat/tasks/' + fbKey(chatChannel);
         firebase.database().ref(oldPath).off('child_added', chatListener);
         chatListener = null;
       }
@@ -3020,7 +3023,12 @@
 
     function listenChat() {
       if (!window.firebaseConnected) return;
-      const path = chatChannel === 'global' ? 'chat/global' : 'chat/tasks/' + chatChannel;
+      // Detach any existing listener before attaching new one
+      if (chatListener) {
+        const oldPath = chatChannel === 'global' ? 'chat/global' : 'chat/tasks/' + fbKey(chatChannel);
+        try { firebase.database().ref(oldPath).off('child_added', chatListener); } catch(e) {}
+      }
+      const path = chatChannel === 'global' ? 'chat/global' : 'chat/tasks/' + fbKey(chatChannel);
       chatListener = firebase.database().ref(path).orderByChild('ts').on('child_added', (snap) => {
         const msg = snap.val();
         if (msg) appendChatMessage(msg);
@@ -3062,7 +3070,7 @@
         return;
       }
 
-      const path = chatChannel === 'global' ? 'chat/global' : 'chat/tasks/' + chatChannel;
+      const path = chatChannel === 'global' ? 'chat/global' : 'chat/tasks/' + fbKey(chatChannel);
       try {
         firebase.database().ref(path).push({
           author: author,
@@ -3172,10 +3180,12 @@
       }
     }
 
+    let ratesFirebaseListener = null;
     function listenRates() {
       if (!window.firebaseConnected) return;
+      if (ratesFirebaseListener) firebase.database().ref('rates').off('value', ratesFirebaseListener);
       try {
-        firebase.database().ref('rates').on('value', (snap) => {
+        ratesFirebaseListener = firebase.database().ref('rates').on('value', (snap) => {
           const fbRates = snap.val();
           if (fbRates) {
             Object.keys(fbRates).forEach(pid => { partnerRates[pid] = fbRates[pid]; });
