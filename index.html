@@ -753,6 +753,43 @@
       background: transparent; cursor: pointer; color: var(--text-secondary); margin-left: 8px;
     }
     .copy-btn:hover { background: var(--accent-light); color: var(--accent); }
+
+    /* ── Responsive ── */
+    @media (max-width: 900px) {
+      #topnav { flex-wrap: wrap; height: auto; padding: 8px 12px; gap: 8px; }
+      .hub-title { font-size: 14px; }
+      .tab-pills { order: 3; width: 100%; justify-content: center; }
+      .tab-pill { font-size: 11px; padding: 5px 10px; }
+      .nav-right { margin-left: auto; }
+      #gantt-sidebar { display: none !important; }
+      #gantt-toolbar { flex-wrap: wrap; gap: 4px; }
+      #gantt-toolbar .gantt-tb-btn { font-size: 10px; padding: 3px 8px; }
+      .chat-sidebar-panel { width: 140px; }
+      .chat-sidebar-panel h3 { font-size: 11px; }
+      .chat-channel-btn { font-size: 10px; padding: 4px 6px; }
+      .rate-cards { gap: 6px; }
+      .rate-card { padding: 6px 8px; }
+    }
+    @media (max-width: 600px) {
+      .tab-pills { gap: 2px; }
+      .tab-pill { font-size: 10px; padding: 4px 8px; }
+      .chat-sidebar-panel { display: none; }
+      #gantt-toolbar { display: none !important; }
+      .budget-table { font-size: 11px; }
+      .budget-table th, .budget-table td { padding: 3px 5px; }
+      .rate-card .partner-label { font-size: 11px; }
+      .rate-input { width: 60px; }
+    }
+
+    /* ── Print ── */
+    @media print {
+      #topnav, #gantt-toolbar, #gantt-sidebar, .chat-input-row,
+      .chat-sidebar-panel, .budget-toolbar, .copy-btn { display: none !important; }
+      body { background: #fff; }
+      .tab-content { display: block !important; height: auto !important; overflow: visible !important; }
+      .tab-content:not(.active) { display: none !important; }
+      .budget-table { page-break-inside: avoid; }
+    }
   </style>
 </head>
 <body>
@@ -1458,21 +1495,29 @@
     function syncGanttToFirebase() {
       if (!window.firebaseConnected) return;
       try {
-        firebase.database().ref('gantt').set(ganttData);
+        ganttSyncingToFB = true;
+        firebase.database().ref('gantt').set(ganttData).then(() => {
+          ganttSyncingToFB = false;
+        }).catch(() => { ganttSyncingToFB = false; });
       } catch (err) {
+        ganttSyncingToFB = false;
         console.warn('Firebase sync error:', err);
       }
     }
 
+    let ganttFirebaseListener = null;
+    let ganttSyncingToFB = false; // guard to avoid re-render loop
+
     function loadGanttFromFirebase() {
       if (!window.firebaseConnected) return;
+      if (ganttFirebaseListener) firebase.database().ref('gantt').off('value', ganttFirebaseListener);
       try {
-        firebase.database().ref('gantt').once('value', (snap) => {
+        ganttFirebaseListener = firebase.database().ref('gantt').on('value', (snap) => {
+          if (ganttSyncingToFB) return; // skip if we just pushed our own change
           if (snap.exists()) {
             ganttData = snap.val();
             migrateData(ganttData);
             ganttRender();
-            toast('Gantt data loaded from Firebase', 'success');
           }
         });
       } catch (err) {
@@ -2632,11 +2677,13 @@
 
     // ── Initialize pmData from IHP_PM_DEFAULTS ──
     function initPMData() {
+      // Try localStorage backup first (offline fallback)
+      loadPMFromLocalStorage();
+
+      // Fill any missing cells with defaults
       ganttData.workPackages.forEach(wp => {
         wp.tasks.forEach(task => {
-          if (!pmData[task.id]) {
-            pmData[task.id] = {};
-          }
+          if (!pmData[task.id]) pmData[task.id] = {};
           PARTNERS.forEach(p => {
             if (pmData[task.id][p.id] === undefined) {
               pmData[task.id][p.id] = (p.id === 'IHP' && IHP_PM_DEFAULTS[task.id] !== undefined)
@@ -2760,6 +2807,9 @@
 
       recalcPMTotals();
 
+      // Always save to localStorage as fallback
+      savePMToLocalStorage();
+
       // Firebase sync
       if (window.firebaseConnected) {
         try {
@@ -2768,6 +2818,27 @@
           console.warn('PM Firebase write error:', err);
         }
       }
+    }
+
+    // ── localStorage fallback for PM data ──
+    function savePMToLocalStorage() {
+      try { localStorage.setItem('aion-cf-pm-backup', JSON.stringify(pmData)); } catch(e) {}
+    }
+    function loadPMFromLocalStorage() {
+      try {
+        const saved = localStorage.getItem('aion-cf-pm-backup');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          Object.keys(parsed).forEach(taskId => {
+            if (!pmData[taskId]) pmData[taskId] = {};
+            Object.keys(parsed[taskId]).forEach(pid => {
+              pmData[taskId][pid] = parsed[taskId][pid];
+            });
+          });
+          return true;
+        }
+      } catch(e) {}
+      return false;
     }
 
     // ── Recalculate all totals without re-rendering the full table ──
@@ -3203,6 +3274,29 @@
       return Math.max(0, Math.min(tEnd, yEnd) - Math.max(tStart, yStart) + 1);
     }
 
+    // Shared: compute PM per year for a given partner across all tasks
+    const YEAR_BANDS = [
+      { label: 'Year 1', start: 1,  end: 12 },
+      { label: 'Year 2', start: 13, end: 24 },
+      { label: 'Year 3', start: 25, end: 36 },
+    ];
+    function getPartnerPMPerYear(partnerId) {
+      return YEAR_BANDS.map(yr => {
+        let pmInYear = 0;
+        ganttData.workPackages.forEach(wp => {
+          wp.tasks.forEach(task => {
+            const taskPM = (pmData[task.id] && pmData[task.id][partnerId]) ? pmData[task.id][partnerId] : 0;
+            if (taskPM === 0) return;
+            const tStart = task.start || 1;
+            const tEnd   = task.end   || 36;
+            const taskLen = tEnd - tStart + 1;
+            pmInYear += taskPM * (overlapMonths(tStart, tEnd, yr.start, yr.end) / taskLen);
+          });
+        });
+        return pmInYear;
+      });
+    }
+
     // ── Table 6.2: Effort per partner per WP (PM) ──
     function buildTable62() {
       const table = document.getElementById('budget-table-62');
@@ -3244,39 +3338,20 @@
     function buildTable61() {
       const table = document.getElementById('budget-table-61');
       if (!table) return;
-      const wps = ganttData.workPackages;
-
-      // Year bands: Y1 = M1-12, Y2 = M13-24, Y3 = M25-36
-      const years = [
-        { label: 'Year 1', start: 1,  end: 12 },
-        { label: 'Year 2', start: 13, end: 24 },
-        { label: 'Year 3', start: 25, end: 36 },
-      ];
 
       let html = '<thead><tr><th>Partner</th>';
-      years.forEach(y => { html += '<th>' + esc(y.label) + ' (PY)</th>'; });
+      YEAR_BANDS.forEach(y => { html += '<th>' + esc(y.label) + ' (PY)</th>'; });
       html += '<th>Total (PY)</th></tr></thead><tbody>';
 
-      const colTotals = new Array(years.length).fill(0);
+      const colTotals = new Array(YEAR_BANDS.length).fill(0);
       let grandTotal = 0;
 
       PARTNERS.forEach(p => {
+        const pmPerYear = getPartnerPMPerYear(p.id);
         html += '<tr><td><span class="partner-dot" style="background:' + p.color + '"></span>' + esc(p.name) + '</td>';
         let rowTotal = 0;
-        years.forEach((yr, yi) => {
-          let pmInYear = 0;
-          wps.forEach(wp => {
-            wp.tasks.forEach(task => {
-              const taskPM = (pmData[task.id] && pmData[task.id][p.id]) ? pmData[task.id][p.id] : 0;
-              if (taskPM === 0) return;
-              const tStart = task.start || 1;
-              const tEnd   = task.end   || 36;
-              const taskLen = tEnd - tStart + 1;
-              const overlap = overlapMonths(tStart, tEnd, yr.start, yr.end);
-              pmInYear += taskPM * (overlap / taskLen);
-            });
-          });
-          const py = pmInYear / 12;
+        pmPerYear.forEach((pm, yi) => {
+          const py = pm / 12;
           rowTotal += py;
           colTotals[yi] += py;
           html += '<td>' + (py > 0.005 ? py.toFixed(2) : '-') + '</td>';
@@ -3287,8 +3362,7 @@
 
       html += '<tr><td><strong>Total</strong></td>';
       colTotals.forEach(t => { html += '<td>' + (t > 0.005 ? t.toFixed(2) : '-') + '</td>'; });
-      html += '<td>' + grandTotal.toFixed(2) + '</td></tr>';
-      html += '</tbody>';
+      html += '<td>' + grandTotal.toFixed(2) + '</td></tr></tbody>';
       table.innerHTML = html;
     }
 
@@ -3296,39 +3370,21 @@
     function buildTable64() {
       const table = document.getElementById('budget-table-64');
       if (!table) return;
-      const wps = ganttData.workPackages;
-
-      const years = [
-        { label: 'Year 1', start: 1,  end: 12 },
-        { label: 'Year 2', start: 13, end: 24 },
-        { label: 'Year 3', start: 25, end: 36 },
-      ];
 
       let html = '<thead><tr><th>Partner</th>';
-      years.forEach(y => { html += '<th>' + esc(y.label) + ' (kEUR)</th>'; });
+      YEAR_BANDS.forEach(y => { html += '<th>' + esc(y.label) + ' (kEUR)</th>'; });
       html += '<th>Total (kEUR)</th></tr></thead><tbody>';
 
-      const colTotals = new Array(years.length).fill(0);
+      const colTotals = new Array(YEAR_BANDS.length).fill(0);
       let grandTotal = 0;
 
       PARTNERS.forEach(p => {
         const rate = partnerRates[p.id] || 0;
+        const pmPerYear = getPartnerPMPerYear(p.id);
         html += '<tr><td><span class="partner-dot" style="background:' + p.color + '"></span>' + esc(p.name) + '</td>';
         let rowTotal = 0;
-        years.forEach((yr, yi) => {
-          let pmInYear = 0;
-          wps.forEach(wp => {
-            wp.tasks.forEach(task => {
-              const taskPM = (pmData[task.id] && pmData[task.id][p.id]) ? pmData[task.id][p.id] : 0;
-              if (taskPM === 0) return;
-              const tStart = task.start || 1;
-              const tEnd   = task.end   || 36;
-              const taskLen = tEnd - tStart + 1;
-              const overlap = overlapMonths(tStart, tEnd, yr.start, yr.end);
-              pmInYear += taskPM * (overlap / taskLen);
-            });
-          });
-          const keur = (pmInYear * rate) / 1000;
+        pmPerYear.forEach((pm, yi) => {
+          const keur = (pm * rate) / 1000;
           rowTotal += keur;
           colTotals[yi] += keur;
           html += '<td>' + (keur > 0.05 ? keur.toFixed(1) : '-') + '</td>';
@@ -3339,8 +3395,7 @@
 
       html += '<tr><td><strong>Total</strong></td>';
       colTotals.forEach(t => { html += '<td>' + (t > 0.05 ? t.toFixed(1) : '-') + '</td>'; });
-      html += '<td>' + grandTotal.toFixed(1) + '</td></tr>';
-      html += '</tbody>';
+      html += '<td>' + grandTotal.toFixed(1) + '</td></tr></tbody>';
       table.innerHTML = html;
     }
 
@@ -3348,48 +3403,25 @@
     function buildTable65() {
       const table = document.getElementById('budget-table-65');
       if (!table) return;
-      const wps = ganttData.workPackages;
 
-      const years = [
-        { label: 'Year 1', start: 1,  end: 12 },
-        { label: 'Year 2', start: 13, end: 24 },
-        { label: 'Year 3', start: 25, end: 36 },
-      ];
-
-      // Build partner -> kEUR per year lookup from Table 6.4 data
-      const partnerYearBudget = {}; // { 'IHP': [kY1, kY2, kY3], ... }
+      // Build partner -> kEUR per year using shared helper
+      const partnerYearBudget = {};
       PARTNERS.forEach(p => {
         const rate = partnerRates[p.id] || 0;
-        partnerYearBudget[p.id] = years.map(yr => {
-          let pmInYear = 0;
-          wps.forEach(wp => {
-            wp.tasks.forEach(task => {
-              const taskPM = (pmData[task.id] && pmData[task.id][p.id]) ? pmData[task.id][p.id] : 0;
-              if (taskPM === 0) return;
-              const tStart = task.start || 1;
-              const tEnd   = task.end   || 36;
-              const taskLen = tEnd - tStart + 1;
-              const overlap = overlapMonths(tStart, tEnd, yr.start, yr.end);
-              pmInYear += taskPM * (overlap / taskLen);
-            });
-          });
-          return (pmInYear * rate) / 1000;
-        });
+        partnerYearBudget[p.id] = getPartnerPMPerYear(p.id).map(pm => (pm * rate) / 1000);
       });
 
       let html = '<thead><tr><th>Country</th>';
-      years.forEach(y => { html += '<th>' + esc(y.label) + ' (kEUR)</th>'; });
+      YEAR_BANDS.forEach(y => { html += '<th>' + esc(y.label) + ' (kEUR)</th>'; });
       html += '<th>Total (kEUR)</th></tr></thead><tbody>';
 
-      const colTotals = new Array(years.length).fill(0);
+      const colTotals = new Array(YEAR_BANDS.length).fill(0);
       let grandTotal = 0;
 
       Object.keys(COUNTRIES).forEach(code => {
         const country = COUNTRIES[code];
-        const yearTotals = years.map((_, yi) => {
-          return country.partners.reduce((sum, pid) => {
-            return sum + ((partnerYearBudget[pid] && partnerYearBudget[pid][yi]) || 0);
-          }, 0);
+        const yearTotals = YEAR_BANDS.map((_, yi) => {
+          return country.partners.reduce((sum, pid) => sum + ((partnerYearBudget[pid] && partnerYearBudget[pid][yi]) || 0), 0);
         });
         const rowTotal = yearTotals.reduce((a, b) => a + b, 0);
         grandTotal += rowTotal;
@@ -3402,8 +3434,7 @@
 
       html += '<tr><td><strong>Total</strong></td>';
       colTotals.forEach(t => { html += '<td>' + (t > 0.05 ? t.toFixed(1) : '-') + '</td>'; });
-      html += '<td>' + grandTotal.toFixed(1) + '</td></tr>';
-      html += '</tbody>';
+      html += '<td>' + grandTotal.toFixed(1) + '</td></tr></tbody>';
       table.innerHTML = html;
     }
 
