@@ -1044,7 +1044,10 @@
       'T6.1': 2, 'T6.2': 2,
     };
 
-    // ── Firebase global flag ────────────────────────────────────────────────
+    // ── Firebase helpers ──────────────────────────────────────────────────
+    // Firebase paths cannot contain dots. T1.1 → T1_1 for storage.
+    function fbKey(taskId) { return taskId.replace(/\./g, '_'); }
+    function fromFbKey(fbId) { return fbId.replace(/_/g, '.'); }
     window.firebaseConnected = false;
 
     // ── Gantt Default Data ───────────────────────────────────────────────────
@@ -2760,7 +2763,7 @@
       // Firebase sync
       if (window.firebaseConnected) {
         try {
-          firebase.database().ref('pm/' + taskId + '/' + partnerId).set(num);
+          firebase.database().ref('pm/' + fbKey(taskId) + '/' + partnerId).set(num);
         } catch (err) {
           console.warn('PM Firebase write error:', err);
         }
@@ -2838,10 +2841,11 @@
         firebase.database().ref('pm').on('value', (snap) => {
           const fbData = snap.val();
           if (fbData) {
-            Object.keys(fbData).forEach(taskId => {
+            Object.keys(fbData).forEach(fbTaskId => {
+              const taskId = fromFbKey(fbTaskId); // T1_1 → T1.1
               if (!pmData[taskId]) pmData[taskId] = {};
-              Object.keys(fbData[taskId]).forEach(partnerId => {
-                pmData[taskId][partnerId] = fbData[taskId][partnerId];
+              Object.keys(fbData[fbTaskId]).forEach(partnerId => {
+                pmData[taskId][partnerId] = fbData[fbTaskId][partnerId];
               });
             });
             updatePMGridFromData();
@@ -2864,9 +2868,9 @@
             const seed = {};
             ganttData.workPackages.forEach(wp => {
               wp.tasks.forEach(task => {
-                seed[task.id] = {};
+                seed[fbKey(task.id)] = {};
                 PARTNERS.forEach(p => {
-                  seed[task.id][p.id] = (p.id === 'IHP' && IHP_PM_DEFAULTS[task.id] !== undefined)
+                  seed[fbKey(task.id)][p.id] = (p.id === 'IHP' && IHP_PM_DEFAULTS[task.id] !== undefined)
                     ? IHP_PM_DEFAULTS[task.id] : 0;
                 });
               });
@@ -2900,9 +2904,9 @@
           const seed = {};
           ganttData.workPackages.forEach(wp => {
             wp.tasks.forEach(task => {
-              seed[task.id] = {};
+              seed[fbKey(task.id)] = {};
               PARTNERS.forEach(p => {
-                seed[task.id][p.id] = (p.id === 'IHP' && IHP_PM_DEFAULTS[task.id] !== undefined)
+                seed[fbKey(task.id)][p.id] = (p.id === 'IHP' && IHP_PM_DEFAULTS[task.id] !== undefined)
                   ? IHP_PM_DEFAULTS[task.id] : 0;
               });
             });
