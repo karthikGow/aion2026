@@ -3124,6 +3124,7 @@
       });
       updatePMGridFromData();
       recalcPMTotals();
+      recalcBudget();
       savePMToLocalStorage();
       if (window.firebaseConnected) {
         try {
@@ -3624,11 +3625,11 @@
         ctx.save();
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.font = 'bold 22px ' + getComputedStyle(document.documentElement).getPropertyValue('--font-display');
+        ctx.font = 'bold 22px ' + getComputedStyle(document.documentElement).getPropertyValue('--font-display').trim();
         ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--text').trim();
         ctx.fillText(text, cx, cy - (subtext ? 10 : 0));
         if (subtext) {
-          ctx.font = '12px ' + getComputedStyle(document.documentElement).getPropertyValue('--font-body');
+          ctx.font = '12px ' + getComputedStyle(document.documentElement).getPropertyValue('--font-body').trim();
           ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--text-secondary').trim();
           ctx.fillText(subtext, cx, cy + 14);
         }
