@@ -1331,6 +1331,10 @@
       if (tabName === 'gantt' && !ganttFirebaseListener && window.firebaseConnected) {
         loadGanttFromFirebase();
       }
+      // Re-render charts when switching to tabs that contain them (Chart.js needs visible canvas)
+      if ((tabName === 'pm' || tabName === 'budget') && typeof renderCharts === 'function') {
+        setTimeout(renderCharts, 50);
+      }
     }
 
     document.querySelectorAll('.tab-pill').forEach(btn => {
