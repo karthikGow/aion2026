@@ -1123,50 +1123,48 @@
           {
             id: 'WP1', name: 'Project Management', lead: 'IHP', color: '#1B4F72',
             tasks: [
-              { id: 'T1.1', name: 'Coordination & Reporting', start: 1,  end: 36, leader: 'IHP' },
-              { id: 'T1.2', name: 'Technical Leadership',     start: 1,  end: 36, leader: 'CER' },
-              { id: 'T1.3', name: 'QA & Risk Management',     start: 1,  end: 36, leader: 'IHP' },
+              { id: 'T1.1', name: 'Project Coordination & Reporting',       start: 1,  end: 36, leader: 'IHP' },
+              { id: 'T1.2', name: 'Technical Leadership',                   start: 1,  end: 36, leader: 'CER' },
+              { id: 'T1.3', name: 'Quality Assurance & Risk Management',    start: 1,  end: 36, leader: 'IHP' },
             ]
           },
           {
             id: 'WP2', name: 'Use Cases & Architecture', lead: 'CER', color: '#D35400',
             tasks: [
-              { id: 'T2.1', name: 'Use Case & KPI Spec',   start: 1,  end: 6,  leader: 'CER' },
-              { id: 'T2.2', name: 'CF-mMIMO Architecture', start: 3,  end: 10, leader: 'IHP' },
-              { id: 'T2.3', name: 'dApp Runtime & E3',     start: 3,  end: 10, leader: 'PW'  },
-              { id: 'T2.4', name: 'ISAC Architecture',     start: 4,  end: 12, leader: 'CER' },
+              { id: 'T2.1', name: 'Use Case Definition & KPI Specification', start: 1,  end: 8,  leader: 'CER' },
+              { id: 'T2.2', name: 'System Architecture & Design on O-RAN',   start: 3,  end: 10, leader: 'IHP' },
+              { id: 'T2.3', name: 'Interfaces & Flow Design',                start: 3,  end: 10, leader: 'PW'  },
             ]
           },
           {
             id: 'WP3', name: 'PHY & Sensing', lead: 'PW', color: '#C0392B',
             tasks: [
-              { id: 'T3.1', name: 'AI Channel Estimation',   start: 3,  end: 24, leader: 'PW'  },
-              { id: 'T3.2', name: 'Interference Estimation', start: 6,  end: 24, leader: 'PW'  },
-              { id: 'T3.3', name: 'AI-replaced PHY',         start: 12, end: 30, leader: 'PW'  },
-              { id: 'T3.4', name: 'Sync & Sensing CF-MIMO',  start: 6,  end: 30, leader: 'IHP' },
+              { id: 'T3.1', name: 'AI-Driven Channel Estimation & Prediction', start: 3,  end: 24, leader: 'PW'  },
+              { id: 'T3.2', name: 'RT Interference Estimation & Awareness',    start: 6,  end: 24, leader: 'PW'  },
+              { id: 'T3.3', name: 'AI-replaced PHY Components',                start: 12, end: 30, leader: 'PW'  },
+              { id: 'T3.4', name: 'Synchronization & Sensing Strategies',      start: 6,  end: 30, leader: 'IHP' },
             ]
           },
           {
             id: 'WP4', name: 'Scheduling', lead: 'TEC', color: '#148F77',
             tasks: [
-              { id: 'T4.1', name: 'Deterministic Scheduling', start: 6,  end: 27, leader: 'IHP' },
-              { id: 'T4.2', name: 'Cross-Layer RRM',          start: 9,  end: 30, leader: 'PW'  },
-              { id: 'T4.3', name: 'Network Digital Twin',     start: 6,  end: 33, leader: 'TEC' },
+              { id: 'T4.1', name: 'Deterministic & Predictive Scheduling',    start: 6,  end: 27, leader: 'IHP' },
+              { id: 'T4.2', name: 'Cross-Layer Radio Resource Management',    start: 9,  end: 30, leader: 'PW'  },
             ]
           },
           {
             id: 'WP5', name: 'Integration & PoC', lead: 'IIS', color: '#2E86C1',
             tasks: [
-              { id: 'T5.1', name: 'PoC Design & Lab Demos', start: 13, end: 24, leader: 'IIS' },
-              { id: 'T5.2', name: 'PoC Integration',        start: 18, end: 33, leader: 'IHP' },
-              { id: 'T5.3', name: 'PoC Demo & Results',     start: 27, end: 36, leader: 'IIS' },
+              { id: 'T5.1', name: 'PoC Design & Specification',       start: 13, end: 24, leader: 'IIS' },
+              { id: 'T5.2', name: 'PoC Integration & Deployment',     start: 18, end: 33, leader: 'IHP' },
+              { id: 'T5.3', name: 'PoC Demonstration & Evaluation',   start: 27, end: 36, leader: 'IIS' },
             ]
           },
           {
             id: 'WP6', name: 'Exploitation', lead: 'SEQ', color: '#8E44AD',
             tasks: [
-              { id: 'T6.1', name: 'Standardisation',              start: 6,  end: 36, leader: 'SEQ' },
-              { id: 'T6.2', name: 'Exploitation & Dissemination', start: 12, end: 36, leader: 'IHP' },
+              { id: 'T6.1', name: 'Standards Monitoring & IP',    start: 6,  end: 36, leader: 'SEQ' },
+              { id: 'T6.2', name: 'Dissemination & Patents',      start: 12, end: 36, leader: 'IHP' },
             ]
           },
         ],
@@ -1549,6 +1547,9 @@
             ganttData = snap.val();
             migrateData(ganttData);
             ganttRender();
+            // Re-render dependent views when gantt structure changes
+            if (typeof updateChatTaskList === 'function') updateChatTaskList();
+            if (typeof renderPMGrid === 'function') { renderPMGrid(); recalcPMTotals(); }
           }
         });
       } catch (err) {
