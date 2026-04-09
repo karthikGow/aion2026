@@ -812,7 +812,7 @@
         <option value="IIS">IIS</option>
         <option value="TEC">TEC</option>
         <option value="SEQ">SEQ</option>
-        <option value="AIRP">AIRP</option>
+        <option value="AIR">AIR</option>
       </select>
       <span id="firebaseStatus" class="status-dot offline" title="Firebase: Offline"></span>
     </div>
@@ -1063,37 +1063,43 @@
       { id: 'IIS',  name: 'IIS',  color: '#2E86C1', country: 'DE' },
       { id: 'TEC',  name: 'TEC',  color: '#148F77', country: 'DE' },
       { id: 'SEQ',  name: 'SEQ',  color: '#8E44AD', country: 'FR' },
-      { id: 'AIRP', name: 'AIRP', color: '#27AE60', country: 'DE' },
+      { id: 'AIR', name: 'AIR', color: '#27AE60', country: 'DE' },
     ];
 
     const COUNTRIES = {
-      DE: { name: 'Germany', partners: ['IHP', 'IIS', 'TEC', 'AIRP'] },
+      DE: { name: 'Germany', partners: ['IHP', 'IIS', 'TEC', 'AIR'] },
       IL: { name: 'Israel',  partners: ['PW', 'CER'] },
       FR: { name: 'France',  partners: ['SEQ'] },
     };
 
     const IHP_PM_DEFAULTS = {
       'T1.1': 8, 'T1.2': 3, 'T1.3': 4,
-      'T2.1': 2, 'T2.2': 3, 'T2.3': 1, 'T2.4': 2,
+      'T2.1': 2, 'T2.2': 3, 'T2.3': 3,
       'T3.1': 6, 'T3.2': 3, 'T3.3': 3, 'T3.4': 8,
-      'T4.1': 7, 'T4.2': 6, 'T4.3': 2,
+      'T4.1': 7, 'T4.2': 8,
       'T5.1': 8, 'T5.2': 3, 'T5.3': 2,
       'T6.1': 2, 'T6.2': 2,
     };
 
-    // All known partner PM allocations (from proposal WP tables)
+    // All known partner PM allocations (from proposal WP tables, 2026-04-09)
     const ALL_PM_DEFAULTS = {
-      'T1.1': { IHP:8 }, 'T1.2': { IHP:3, CER:3 }, 'T1.3': { IHP:4 },
-      'T2.1': { CER:5, IHP:2, IIS:1, TEC:1, AIRP:1 },
-      'T2.2': { CER:1, IHP:3, IIS:1, AIRP:1 },
-      'T2.3': { CER:1, IHP:1, IIS:1, TEC:1, AIRP:1 },
-      'T2.4': { CER:5, IHP:2, AIRP:2 },
-      'T3.1': { IHP:6, TEC:2, AIRP:2 }, 'T3.2': { CER:3, IHP:3, TEC:1 },
-      'T3.3': { IHP:3, TEC:1, AIRP:3 }, 'T3.4': { CER:8, IHP:8, TEC:2, AIRP:6 },
-      'T4.1': { TEC:2, IHP:7, AIRP:3 }, 'T4.2': { TEC:2, IHP:6, AIRP:6 },
-      'T4.3': { TEC:3, IHP:2, AIRP:2 },
-      'T5.1': { IHP:8, AIRP:6 }, 'T5.2': { IHP:3, AIRP:6 }, 'T5.3': { IHP:2 },
-      'T6.1': { IHP:2 }, 'T6.2': { IHP:2 },
+      'T1.1': { IHP:8, PW:1, CER:0, IIS:1, TEC:1, SEQ:1, AIR:1 },
+      'T1.2': { IHP:3, PW:1, CER:5, IIS:0, TEC:0, SEQ:0, AIR:0 },
+      'T1.3': { IHP:4, PW:0, CER:0, IIS:0, TEC:0, SEQ:0, AIR:0 },
+      'T2.1': { IHP:2, PW:2, CER:8, IIS:1, TEC:1, SEQ:3, AIR:1 },
+      'T2.2': { IHP:3, PW:3, CER:3, IIS:1, TEC:0, SEQ:5, AIR:1 },
+      'T2.3': { IHP:3, PW:10, CER:2, IIS:1, TEC:1, SEQ:5, AIR:3 },
+      'T3.1': { IHP:6, PW:10, CER:0, IIS:0, TEC:2, SEQ:5, AIR:2 },
+      'T3.2': { IHP:3, PW:10, CER:3, IIS:0, TEC:1, SEQ:12, AIR:0 },
+      'T3.3': { IHP:3, PW:12, CER:0, IIS:0, TEC:1, SEQ:13, AIR:3 },
+      'T3.4': { IHP:8, PW:6, CER:10, IIS:0, TEC:2, SEQ:6, AIR:6 },
+      'T4.1': { IHP:7, PW:8, CER:5, IIS:0, TEC:5, SEQ:0, AIR:3 },
+      'T4.2': { IHP:8, PW:10, CER:15, IIS:0, TEC:5, SEQ:0, AIR:8 },
+      'T5.1': { IHP:8, PW:5, CER:3, IIS:0, TEC:3, SEQ:0, AIR:6 },
+      'T5.2': { IHP:3, PW:7, CER:5, IIS:0, TEC:4, SEQ:0, AIR:6 },
+      'T5.3': { IHP:2, PW:6, CER:2, IIS:0, TEC:4, SEQ:0, AIR:0 },
+      'T6.1': { IHP:2, PW:7, CER:0, IIS:0, TEC:0, SEQ:2, AIR:0 },
+      'T6.2': { IHP:2, PW:2, CER:0, IIS:0, TEC:0, SEQ:2, AIR:0 },
     };
 
     // ── Firebase helpers ──────────────────────────────────────────────────
