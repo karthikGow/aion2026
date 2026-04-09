@@ -754,6 +754,57 @@
     }
     .copy-btn:hover { background: var(--accent-light); color: var(--accent); }
 
+    /* ── Cost Input Cards ── */
+    .cost-cards { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
+    .cost-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+      box-shadow: var(--shadow-sm); overflow: hidden;
+    }
+    .cost-card-header {
+      display: flex; align-items: center; gap: 8px; padding: 8px 12px; cursor: pointer;
+      user-select: none;
+    }
+    .cost-card-header:hover { background: var(--surface-hover); }
+    .cost-card-header .partner-dot, .rate-card .partner-dot {
+      display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle;
+    }
+    .cost-card-header .partner-label { font-weight: 600; font-size: 12px; min-width: 40px; }
+    .cost-card-header .overhead-group {
+      display: flex; align-items: center; gap: 4px; margin-left: auto; margin-right: 8px;
+    }
+    .cost-card-header .overhead-group label { font-size: 11px; color: var(--text-secondary); }
+    .cost-card-header .overhead-input {
+      width: 56px; border: 1px solid var(--border); border-radius: 4px; padding: 3px 5px;
+      font-family: var(--font-mono); font-size: 12px; text-align: right;
+    }
+    .cost-card-header .overhead-input:focus { outline: none; border-color: var(--accent); }
+    .cost-card-header .expand-arrow {
+      font-size: 12px; color: var(--text-tertiary); transition: transform 0.2s;
+    }
+    .cost-card.open .expand-arrow { transform: rotate(180deg); }
+    .cost-card-body {
+      display: none; padding: 0 12px 10px 12px;
+    }
+    .cost-card.open .cost-card-body { display: block; }
+    .cost-grid {
+      width: 100%; max-width: 520px; border-collapse: collapse; font-size: 12px;
+    }
+    .cost-grid th {
+      padding: 4px 8px; text-align: right; font-family: var(--font-display);
+      font-weight: 600; font-size: 11px; color: var(--text-secondary);
+      border-bottom: 1px solid var(--border-light);
+    }
+    .cost-grid th:first-child { text-align: left; }
+    .cost-grid td { padding: 4px 8px; }
+    .cost-grid td:first-child {
+      font-family: var(--font-body); font-weight: 500; font-size: 12px; text-align: left;
+    }
+    .cost-grid input {
+      width: 72px; border: 1px solid var(--border); border-radius: 4px; padding: 3px 5px;
+      font-family: var(--font-mono); font-size: 12px; text-align: right;
+    }
+    .cost-grid input:focus { outline: none; border-color: var(--accent); }
+
     /* ── Responsive ── */
     @media (max-width: 900px) {
       #topnav { flex-wrap: wrap; height: auto; padding: 8px 12px; gap: 8px; }
@@ -769,6 +820,8 @@
       .chat-channel-btn { font-size: 10px; padding: 4px 6px; }
       .rate-cards { gap: 6px; }
       .rate-card { padding: 6px 8px; }
+      .cost-grid input { width: 60px; }
+      .cost-card-header .overhead-input { width: 48px; }
     }
     @media (max-width: 600px) {
       .tab-pills { gap: 2px; }
@@ -784,7 +837,7 @@
     /* ── Print ── */
     @media print {
       #topnav, #gantt-toolbar, #gantt-sidebar, .chat-input-row,
-      .chat-sidebar-panel, .budget-toolbar, .copy-btn { display: none !important; }
+      .chat-sidebar-panel, .budget-toolbar, .copy-btn, .cost-cards { display: none !important; }
       body { background: #fff; }
       .tab-content { display: block !important; height: auto !important; overflow: visible !important; }
       .tab-content:not(.active) { display: none !important; }
@@ -992,6 +1045,24 @@
         <h3>Table 6.5: Budget per Country per Year (kEUR) <button class="copy-btn" onclick="copyTableHTML('budget-table-65')">Copy</button></h3>
         <table class="budget-table" id="budget-table-65"></table>
       </div>
+
+      <!-- Additional Costs per Partner -->
+      <div class="budget-section">
+        <h3>Additional Costs per Partner (EUR)</h3>
+        <div class="cost-cards" id="cost-inputs"><!-- Built by renderCostInputs() --></div>
+      </div>
+
+      <!-- Full Budget Summary -->
+      <div class="budget-section">
+        <h3>Full Budget Summary per Partner (kEUR) <button class="copy-btn" onclick="copyTableHTML('budget-full')">Copy</button></h3>
+        <table class="budget-table" id="budget-full"></table>
+      </div>
+
+      <!-- Full Budget per Country -->
+      <div class="budget-section">
+        <h3>Full Budget per Country (kEUR) <button class="copy-btn" onclick="copyTableHTML('budget-country-full')">Copy</button></h3>
+        <table class="budget-table" id="budget-country-full"></table>
+      </div>
     </div>
 
     <!-- Chat Tab -->
@@ -1075,11 +1146,11 @@
     const IHP_PM_DEFAULTS = {
       'T1.1': 8, 'T1.2': 3, 'T1.3': 4,
       'T2.1': 2, 'T2.2': 3, 'T2.3': 3,
-      'T3.1': 6, 'T3.2': 3, 'T3.3': 3, 'T3.4': 8,
+      'T3.1': 7, 'T3.2': 3, 'T3.3': 3, 'T3.4': 9,
       'T4.1': 7, 'T4.2': 8,
-      'T5.1': 8, 'T5.2': 3, 'T5.3': 2,
+      'T5.1': 9, 'T5.2': 4, 'T5.3': 2,
       'T6.1': 2, 'T6.2': 2,
-    };
+    }; // Total: 79 PM (BMBF approved)
 
     // All known partner PM allocations (from proposal WP tables, 2026-04-09)
     const ALL_PM_DEFAULTS = {
@@ -1089,14 +1160,14 @@
       'T2.1': { IHP:2, PW:2, CER:8, IIS:1, TEC:1, SEQ:3, AIR:1 },
       'T2.2': { IHP:3, PW:3, CER:3, IIS:1, TEC:0, SEQ:5, AIR:1 },
       'T2.3': { IHP:3, PW:10, CER:2, IIS:1, TEC:1, SEQ:5, AIR:3 },
-      'T3.1': { IHP:6, PW:10, CER:0, IIS:0, TEC:2, SEQ:5, AIR:2 },
+      'T3.1': { IHP:7, PW:10, CER:0, IIS:0, TEC:2, SEQ:5, AIR:2 },
       'T3.2': { IHP:3, PW:10, CER:3, IIS:0, TEC:1, SEQ:12, AIR:0 },
       'T3.3': { IHP:3, PW:12, CER:0, IIS:0, TEC:1, SEQ:13, AIR:3 },
-      'T3.4': { IHP:8, PW:6, CER:10, IIS:0, TEC:2, SEQ:6, AIR:6 },
+      'T3.4': { IHP:9, PW:6, CER:10, IIS:0, TEC:2, SEQ:6, AIR:6 },
       'T4.1': { IHP:7, PW:8, CER:5, IIS:0, TEC:5, SEQ:0, AIR:3 },
       'T4.2': { IHP:8, PW:10, CER:15, IIS:0, TEC:5, SEQ:0, AIR:8 },
-      'T5.1': { IHP:8, PW:5, CER:3, IIS:0, TEC:3, SEQ:0, AIR:6 },
-      'T5.2': { IHP:3, PW:7, CER:5, IIS:0, TEC:4, SEQ:0, AIR:6 },
+      'T5.1': { IHP:9, PW:5, CER:3, IIS:0, TEC:3, SEQ:0, AIR:6 },
+      'T5.2': { IHP:4, PW:7, CER:5, IIS:0, TEC:4, SEQ:0, AIR:6 },
       'T5.3': { IHP:2, PW:6, CER:2, IIS:0, TEC:4, SEQ:0, AIR:0 },
       'T6.1': { IHP:2, PW:7, CER:0, IIS:0, TEC:0, SEQ:2, AIR:0 },
       'T6.2': { IHP:2, PW:2, CER:0, IIS:0, TEC:0, SEQ:2, AIR:0 },
@@ -1292,6 +1363,7 @@
         toast('Firebase connected', 'success');
         loadGanttFromFirebase();
         seedPMFirebase();
+        seedCostsFirebase();
         listenChat();
         listenRates();
       }
@@ -1355,6 +1427,8 @@
         loadGanttFromFirebase();
         // Seed PM data if empty, then start realtime listener
         seedPMFirebase();
+        // Seed cost data if empty, then start realtime listener
+        seedCostsFirebase();
         // Start chat realtime listener
         listenChat();
         // Start budget rates realtime listener
@@ -3487,12 +3561,14 @@
       table.innerHTML = html;
     }
 
-    // ── Master recalc: rebuild all four tables ──
+    // ── Master recalc: rebuild all tables ──
     function recalcBudget() {
       buildTable62();
       buildTable61();
       buildTable64();
       buildTable65();
+      buildFullBudgetTable();
+      buildCountryFullBudgetTable();
     }
 
     // ── Excel export via SheetJS ──
@@ -3520,6 +3596,16 @@
           XLSX.utils.book_append_sheet(wb, XLSX.utils.table_to_sheet(t65), 'T6.5 Budget per Country');
         }
 
+        const tFull = document.getElementById('budget-full');
+        if (tFull && tFull.rows.length > 0) {
+          XLSX.utils.book_append_sheet(wb, XLSX.utils.table_to_sheet(tFull), 'Full Budget per Partner');
+        }
+
+        const tCountryFull = document.getElementById('budget-country-full');
+        if (tCountryFull && tCountryFull.rows.length > 0) {
+          XLSX.utils.book_append_sheet(wb, XLSX.utils.table_to_sheet(tCountryFull), 'Full Budget per Country');
+        }
+
         XLSX.writeFile(wb, 'AION-CF_Budget_Tables.xlsx');
         toast('Budget tables exported to Excel', 'success');
       } catch (err) {
@@ -3545,10 +3631,320 @@
       }
     }
 
+    // ══════════════════════════════════════════════════════════════════════════
+    //  ADDITIONAL COSTS MODULE
+    // ══════════════════════════════════════════════════════════════════════════
+
+    const COST_CATEGORIES = ['materials', 'travel', 'subcontracting', 'other'];
+    const COST_LABELS = { materials: 'Materials', travel: 'Travel', subcontracting: 'Subcontracting', other: 'Other' };
+    const YEAR_KEYS = ['y1', 'y2', 'y3'];
+
+    const COST_DEFAULTS = {
+      IHP: {
+        materials:      { y1: 5000, y2: 0, y3: 0 },
+        travel:         { y1: 7000, y2: 6000, y3: 4000 },
+        subcontracting: { y1: 20000, y2: 0, y3: 0 },
+        other:          { y1: 0, y2: 0, y3: 0 },
+        overheadPct:    10.0
+      }
+    };
+
+    let partnerCosts = {};
+
+    function emptyCostEntry() {
+      return {
+        materials:      { y1: 0, y2: 0, y3: 0 },
+        travel:         { y1: 0, y2: 0, y3: 0 },
+        subcontracting: { y1: 0, y2: 0, y3: 0 },
+        other:          { y1: 0, y2: 0, y3: 0 },
+        overheadPct:    0
+      };
+    }
+
+    function saveCostsToLocalStorage() {
+      try { localStorage.setItem('aion-cf-costs-backup', JSON.stringify(partnerCosts)); } catch(e) {}
+    }
+
+    function loadCostsFromLocalStorage() {
+      try {
+        const s = localStorage.getItem('aion-cf-costs-backup');
+        if (s) { partnerCosts = JSON.parse(s); return true; }
+      } catch(e) {}
+      return false;
+    }
+
+    function initCosts() {
+      loadCostsFromLocalStorage();
+      PARTNERS.forEach(p => {
+        if (!partnerCosts[p.id]) {
+          const defaults = COST_DEFAULTS[p.id];
+          if (defaults) {
+            partnerCosts[p.id] = JSON.parse(JSON.stringify(defaults));
+          } else {
+            partnerCosts[p.id] = emptyCostEntry();
+          }
+        }
+        // Ensure all keys exist (in case localStorage had partial data)
+        COST_CATEGORIES.forEach(cat => {
+          if (!partnerCosts[p.id][cat]) partnerCosts[p.id][cat] = { y1: 0, y2: 0, y3: 0 };
+          YEAR_KEYS.forEach(yk => {
+            if (partnerCosts[p.id][cat][yk] === undefined) partnerCosts[p.id][cat][yk] = 0;
+          });
+        });
+        if (partnerCosts[p.id].overheadPct === undefined) partnerCosts[p.id].overheadPct = 0;
+      });
+    }
+
+    function renderCostInputs() {
+      const container = document.getElementById('cost-inputs');
+      if (!container) return;
+      container.innerHTML = '';
+      PARTNERS.forEach(p => {
+        const pc = partnerCosts[p.id] || emptyCostEntry();
+        const card = document.createElement('div');
+        card.className = 'cost-card';
+        card.id = 'cost-card-' + p.id;
+
+        // Header row
+        const header = document.createElement('div');
+        header.className = 'cost-card-header';
+        header.innerHTML =
+          '<span class="partner-dot" style="background:' + p.color + '"></span>' +
+          '<span class="partner-label">' + esc(p.name) + '</span>' +
+          '<div class="overhead-group">' +
+            '<label>Overhead:</label>' +
+            '<input type="number" class="overhead-input" value="' + (pc.overheadPct || 0) + '" ' +
+              'step="0.5" min="0" max="100" ' +
+              'onclick="event.stopPropagation()" ' +
+              'onchange="onOverheadChange(\'' + p.id + '\', this.value)">' +
+            '<label>%</label>' +
+          '</div>' +
+          '<span class="expand-arrow">&#9660;</span>';
+        header.addEventListener('click', function(e) {
+          if (e.target.tagName === 'INPUT') return;
+          card.classList.toggle('open');
+        });
+        card.appendChild(header);
+
+        // Body with cost grid
+        const body = document.createElement('div');
+        body.className = 'cost-card-body';
+        let gridHTML = '<table class="cost-grid"><thead><tr><th>Category</th>';
+        YEAR_KEYS.forEach((yk, i) => { gridHTML += '<th>Y' + (i + 1) + ' (EUR)</th>'; });
+        gridHTML += '</tr></thead><tbody>';
+        COST_CATEGORIES.forEach(cat => {
+          gridHTML += '<tr><td>' + esc(COST_LABELS[cat]) + '</td>';
+          YEAR_KEYS.forEach(yk => {
+            const val = (pc[cat] && pc[cat][yk]) ? pc[cat][yk] : 0;
+            gridHTML += '<td><input type="number" value="' + val + '" step="100" min="0" ' +
+              'onchange="onCostChange(\'' + p.id + '\',\'' + cat + '\',\'' + yk + '\',this.value)"></td>';
+          });
+          gridHTML += '</tr>';
+        });
+        gridHTML += '</tbody></table>';
+        body.innerHTML = gridHTML;
+        card.appendChild(body);
+
+        container.appendChild(card);
+      });
+    }
+
+    function onCostChange(partnerId, category, yearKey, value) {
+      let num = parseFloat(value) || 0;
+      if (num < 0) num = 0;
+      if (!partnerCosts[partnerId]) partnerCosts[partnerId] = emptyCostEntry();
+      if (!partnerCosts[partnerId][category]) partnerCosts[partnerId][category] = { y1: 0, y2: 0, y3: 0 };
+      partnerCosts[partnerId][category][yearKey] = num;
+      saveCostsToLocalStorage();
+      recalcBudget();
+      if (window.firebaseConnected) {
+        try {
+          firebase.database().ref('costs/' + partnerId + '/' + category + '/' + yearKey).set(num);
+        } catch (err) { console.warn('Cost Firebase write error:', err); }
+      }
+    }
+
+    function onOverheadChange(partnerId, value) {
+      let num = parseFloat(value) || 0;
+      if (num < 0) num = 0;
+      if (num > 100) num = 100;
+      if (!partnerCosts[partnerId]) partnerCosts[partnerId] = emptyCostEntry();
+      partnerCosts[partnerId].overheadPct = num;
+      saveCostsToLocalStorage();
+      recalcBudget();
+      if (window.firebaseConnected) {
+        try {
+          firebase.database().ref('costs/' + partnerId + '/overheadPct').set(num);
+        } catch (err) { console.warn('Overhead Firebase write error:', err); }
+      }
+    }
+
+    let costsFirebaseListener = null;
+    function listenCosts() {
+      if (!window.firebaseConnected) return;
+      if (costsFirebaseListener) firebase.database().ref('costs').off('value', costsFirebaseListener);
+      try {
+        costsFirebaseListener = firebase.database().ref('costs').on('value', (snap) => {
+          const fbCosts = snap.val();
+          if (fbCosts) {
+            Object.keys(fbCosts).forEach(pid => {
+              if (!partnerCosts[pid]) partnerCosts[pid] = emptyCostEntry();
+              const fc = fbCosts[pid];
+              COST_CATEGORIES.forEach(cat => {
+                if (fc[cat]) {
+                  if (!partnerCosts[pid][cat]) partnerCosts[pid][cat] = { y1: 0, y2: 0, y3: 0 };
+                  YEAR_KEYS.forEach(yk => {
+                    if (fc[cat][yk] !== undefined) partnerCosts[pid][cat][yk] = fc[cat][yk];
+                  });
+                }
+              });
+              if (fc.overheadPct !== undefined) partnerCosts[pid].overheadPct = fc.overheadPct;
+            });
+            saveCostsToLocalStorage();
+            renderCostInputs();
+            recalcBudget();
+          }
+        });
+      } catch (err) {
+        console.warn('Cost Firebase listen error:', err);
+      }
+    }
+
+    function seedCostsFirebase() {
+      if (!window.firebaseConnected) return;
+      try {
+        firebase.database().ref('costs').once('value', (snap) => {
+          if (!snap.exists()) {
+            const seed = {};
+            PARTNERS.forEach(p => {
+              seed[p.id] = partnerCosts[p.id] || emptyCostEntry();
+            });
+            firebase.database().ref('costs').set(seed);
+            toast('Cost defaults seeded to Firebase', 'info');
+          }
+          listenCosts();
+        });
+      } catch (err) {
+        console.warn('Cost seed error:', err);
+        listenCosts();
+      }
+    }
+
+    // ── Full Budget Summary per Partner (kEUR) ──
+    function buildFullBudgetTable() {
+      const table = document.getElementById('budget-full');
+      if (!table) return;
+
+      let html = '<thead><tr><th>Partner</th><th>Personnel</th><th>Materials</th>' +
+        '<th>Travel</th><th>Subcontr.</th><th>Other</th><th>Direct</th>' +
+        '<th>Overhead</th><th>Total</th></tr></thead><tbody>';
+
+      const totals = { personnel: 0, materials: 0, travel: 0, subcontracting: 0, other: 0, direct: 0, overhead: 0, total: 0 };
+
+      PARTNERS.forEach(p => {
+        const rate = partnerRates[p.id] || 0;
+        const pmPerYear = getPartnerPMPerYear(p.id);
+        const personnelEUR = pmPerYear.reduce((s, pm) => s + pm * rate, 0);
+        const pc = partnerCosts[p.id] || emptyCostEntry();
+
+        const matEUR = YEAR_KEYS.reduce((s, yk) => s + ((pc.materials && pc.materials[yk]) || 0), 0);
+        const trvEUR = YEAR_KEYS.reduce((s, yk) => s + ((pc.travel && pc.travel[yk]) || 0), 0);
+        const subEUR = YEAR_KEYS.reduce((s, yk) => s + ((pc.subcontracting && pc.subcontracting[yk]) || 0), 0);
+        const othEUR = YEAR_KEYS.reduce((s, yk) => s + ((pc.other && pc.other[yk]) || 0), 0);
+        const directEUR = personnelEUR + matEUR + trvEUR + subEUR + othEUR;
+        const overheadEUR = personnelEUR * ((pc.overheadPct || 0) / 100);
+        const totalEUR = directEUR + overheadEUR;
+
+        const pk = personnelEUR / 1000, mk = matEUR / 1000, tk = trvEUR / 1000;
+        const sk = subEUR / 1000, ok = othEUR / 1000, dk = directEUR / 1000;
+        const ohk = overheadEUR / 1000, totk = totalEUR / 1000;
+
+        totals.personnel += pk; totals.materials += mk; totals.travel += tk;
+        totals.subcontracting += sk; totals.other += ok; totals.direct += dk;
+        totals.overhead += ohk; totals.total += totk;
+
+        const fmt = v => v > 0.05 ? v.toFixed(1) : '-';
+        html += '<tr><td><span class="partner-dot" style="background:' + p.color + '"></span>' + esc(p.name) + '</td>';
+        html += '<td>' + fmt(pk) + '</td><td>' + fmt(mk) + '</td><td>' + fmt(tk) + '</td>';
+        html += '<td>' + fmt(sk) + '</td><td>' + fmt(ok) + '</td><td>' + fmt(dk) + '</td>';
+        html += '<td>' + fmt(ohk) + '</td><td>' + fmt(totk) + '</td></tr>';
+      });
+
+      const fmt = v => v > 0.05 ? v.toFixed(1) : '-';
+      html += '<tr><td><strong>Total</strong></td>';
+      html += '<td>' + fmt(totals.personnel) + '</td><td>' + fmt(totals.materials) + '</td>';
+      html += '<td>' + fmt(totals.travel) + '</td><td>' + fmt(totals.subcontracting) + '</td>';
+      html += '<td>' + fmt(totals.other) + '</td><td>' + fmt(totals.direct) + '</td>';
+      html += '<td>' + fmt(totals.overhead) + '</td><td>' + fmt(totals.total) + '</td></tr>';
+      html += '</tbody>';
+      table.innerHTML = html;
+    }
+
+    // ── Full Budget per Country (kEUR) ──
+    function buildCountryFullBudgetTable() {
+      const table = document.getElementById('budget-country-full');
+      if (!table) return;
+
+      // Pre-compute per-partner full budget values (in kEUR)
+      const partnerBudget = {};
+      PARTNERS.forEach(p => {
+        const rate = partnerRates[p.id] || 0;
+        const pmPerYear = getPartnerPMPerYear(p.id);
+        const personnelEUR = pmPerYear.reduce((s, pm) => s + pm * rate, 0);
+        const pc = partnerCosts[p.id] || emptyCostEntry();
+        const matEUR = YEAR_KEYS.reduce((s, yk) => s + ((pc.materials && pc.materials[yk]) || 0), 0);
+        const trvEUR = YEAR_KEYS.reduce((s, yk) => s + ((pc.travel && pc.travel[yk]) || 0), 0);
+        const subEUR = YEAR_KEYS.reduce((s, yk) => s + ((pc.subcontracting && pc.subcontracting[yk]) || 0), 0);
+        const othEUR = YEAR_KEYS.reduce((s, yk) => s + ((pc.other && pc.other[yk]) || 0), 0);
+        const directEUR = personnelEUR + matEUR + trvEUR + subEUR + othEUR;
+        const overheadEUR = personnelEUR * ((pc.overheadPct || 0) / 100);
+        partnerBudget[p.id] = {
+          personnel: personnelEUR / 1000, materials: matEUR / 1000, travel: trvEUR / 1000,
+          subcontracting: subEUR / 1000, other: othEUR / 1000, direct: directEUR / 1000,
+          overhead: overheadEUR / 1000, total: (directEUR + overheadEUR) / 1000
+        };
+      });
+
+      let html = '<thead><tr><th>Country</th><th>Personnel</th><th>Materials</th>' +
+        '<th>Travel</th><th>Subcontr.</th><th>Other</th><th>Direct</th>' +
+        '<th>Overhead</th><th>Total</th></tr></thead><tbody>';
+
+      const totals = { personnel: 0, materials: 0, travel: 0, subcontracting: 0, other: 0, direct: 0, overhead: 0, total: 0 };
+
+      Object.keys(COUNTRIES).forEach(code => {
+        const country = COUNTRIES[code];
+        const row = { personnel: 0, materials: 0, travel: 0, subcontracting: 0, other: 0, direct: 0, overhead: 0, total: 0 };
+        country.partners.forEach(pid => {
+          if (partnerBudget[pid]) {
+            Object.keys(row).forEach(k => { row[k] += partnerBudget[pid][k] || 0; });
+          }
+        });
+        Object.keys(totals).forEach(k => { totals[k] += row[k]; });
+
+        const fmt = v => v > 0.05 ? v.toFixed(1) : '-';
+        html += '<tr><td><strong>' + esc(country.name) + ' (' + esc(code) + ')</strong></td>';
+        html += '<td>' + fmt(row.personnel) + '</td><td>' + fmt(row.materials) + '</td>';
+        html += '<td>' + fmt(row.travel) + '</td><td>' + fmt(row.subcontracting) + '</td>';
+        html += '<td>' + fmt(row.other) + '</td><td>' + fmt(row.direct) + '</td>';
+        html += '<td>' + fmt(row.overhead) + '</td><td>' + fmt(row.total) + '</td></tr>';
+      });
+
+      const fmt = v => v > 0.05 ? v.toFixed(1) : '-';
+      html += '<tr><td><strong>Total</strong></td>';
+      html += '<td>' + fmt(totals.personnel) + '</td><td>' + fmt(totals.materials) + '</td>';
+      html += '<td>' + fmt(totals.travel) + '</td><td>' + fmt(totals.subcontracting) + '</td>';
+      html += '<td>' + fmt(totals.other) + '</td><td>' + fmt(totals.direct) + '</td>';
+      html += '<td>' + fmt(totals.overhead) + '</td><td>' + fmt(totals.total) + '</td></tr>';
+      html += '</tbody>';
+      table.innerHTML = html;
+    }
+
     // ── Budget Init ──
     function initBudget() {
       initRates();
+      initCosts();
       renderRateCards();
+      renderCostInputs();
       recalcBudget();
       // Warn if all rates are still at default and Firebase hasn't loaded yet
       if (!window.firebaseConnected) {
