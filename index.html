@@ -9,6 +9,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
   <style>
     /* ── CSS Variables ── */
     :root {
@@ -728,6 +729,32 @@
     .budget-table .partner-dot {
       display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle;
     }
+    .chart-row {
+      display: flex;
+      gap: 24px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-bottom: 8px;
+    }
+    .chart-container {
+      flex: 1;
+      max-width: 420px;
+      min-width: 280px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      box-shadow: var(--shadow-sm);
+    }
+    .chart-container h4 {
+      font-family: var(--font-display);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-align: center;
+      margin: 0 0 8px 0;
+      letter-spacing: 0.3px;
+    }
     .rate-cards { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; }
     .rate-card {
       background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
@@ -832,6 +859,8 @@
       .budget-table th, .budget-table td { padding: 3px 5px; }
       .rate-card .partner-label { font-size: 11px; }
       .rate-input { width: 60px; }
+      .chart-row { flex-direction: column; align-items: center; }
+      .chart-container { max-width: 100%; }
     }
 
     /* ── Print ── */
@@ -1019,6 +1048,21 @@
         <h3>EUR per Person-Month Rates</h3>
         <div class="rate-cards" id="rate-cards">
           <!-- Built by renderRateCards() -->
+        </div>
+      </div>
+
+      <!-- Overview Charts -->
+      <div class="budget-section">
+        <h3>Overview</h3>
+        <div class="chart-row" id="chart-row">
+          <div class="chart-container">
+            <h4>Effort Distribution by WP</h4>
+            <canvas id="chart-wp-effort"></canvas>
+          </div>
+          <div class="chart-container">
+            <h4>Total Budget by Partner</h4>
+            <canvas id="chart-partner-budget"></canvas>
+          </div>
         </div>
       </div>
 
@@ -3563,6 +3607,182 @@
     }
 
     // ── Master recalc: rebuild all tables ──
+    // ── Chart.js Donut Charts ──
+    let wpEffortChart = null;
+    let partnerBudgetChart = null;
+
+    // Center text plugin for Chart.js donut
+    const centerTextPlugin = {
+      id: 'centerText',
+      afterDraw(chart) {
+        const { ctx, chartArea } = chart;
+        if (!chart.config.options.plugins.centerText) return;
+        const text = chart.config.options.plugins.centerText.text || '';
+        const subtext = chart.config.options.plugins.centerText.subtext || '';
+        const cx = (chartArea.left + chartArea.right) / 2;
+        const cy = (chartArea.top + chartArea.bottom) / 2;
+        ctx.save();
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = 'bold 22px ' + getComputedStyle(document.documentElement).getPropertyValue('--font-display');
+        ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--text').trim();
+        ctx.fillText(text, cx, cy - (subtext ? 10 : 0));
+        if (subtext) {
+          ctx.font = '12px ' + getComputedStyle(document.documentElement).getPropertyValue('--font-body');
+          ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--text-secondary').trim();
+          ctx.fillText(subtext, cx, cy + 14);
+        }
+        ctx.restore();
+      }
+    };
+
+    function renderCharts() {
+      if (typeof Chart === 'undefined') return; // Chart.js not loaded yet
+
+      // === WP Effort Donut ===
+      const wpLabels = [];
+      const wpData = [];
+      const wpColors = [];
+      let totalPM = 0;
+
+      ganttData.workPackages.forEach(wp => {
+        let wpPM = 0;
+        wp.tasks.forEach(task => {
+          PARTNERS.forEach(p => {
+            wpPM += (pmData[task.id] && pmData[task.id][p.id]) ? pmData[task.id][p.id] : 0;
+          });
+        });
+        wpLabels.push(wp.id + ': ' + wp.name);
+        wpData.push(wpPM);
+        wpColors.push(wp.color);
+        totalPM += wpPM;
+      });
+
+      const wpCanvas = document.getElementById('chart-wp-effort');
+      if (wpCanvas) {
+        if (wpEffortChart) wpEffortChart.destroy();
+        wpEffortChart = new Chart(wpCanvas, {
+          type: 'doughnut',
+          data: {
+            labels: wpLabels,
+            datasets: [{
+              data: wpData,
+              backgroundColor: wpColors,
+              borderColor: '#fff',
+              borderWidth: 2,
+              hoverBorderWidth: 3,
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            cutout: '55%',
+            plugins: {
+              centerText: { text: totalPM.toString(), subtext: 'Person-Months' },
+              legend: {
+                position: 'bottom',
+                labels: {
+                  font: { family: getComputedStyle(document.documentElement).getPropertyValue('--font-body').trim(), size: 11 },
+                  color: getComputedStyle(document.documentElement).getPropertyValue('--text-secondary').trim(),
+                  padding: 12,
+                  usePointStyle: true,
+                  pointStyle: 'circle',
+                }
+              },
+              tooltip: {
+                callbacks: {
+                  label: function(ctx) {
+                    const val = ctx.parsed;
+                    const pct = ((val / totalPM) * 100).toFixed(1);
+                    return ctx.label + ': ' + val + ' PM (' + pct + '%)';
+                  }
+                }
+              }
+            }
+          },
+          plugins: [centerTextPlugin]
+        });
+      }
+
+      // === Partner Budget Donut ===
+      const partnerLabels = [];
+      const partnerData = [];
+      const partnerColors = [];
+      let totalBudget = 0;
+
+      PARTNERS.forEach(p => {
+        // Personnel
+        let personnelPM = 0;
+        ganttData.workPackages.forEach(wp => {
+          wp.tasks.forEach(task => {
+            personnelPM += (pmData[task.id] && pmData[task.id][p.id]) ? pmData[task.id][p.id] : 0;
+          });
+        });
+        const rate = partnerRates[p.id] || 0;
+        const personnelEUR = personnelPM * rate;
+
+        // Additional costs
+        const pc = partnerCosts[p.id] || {};
+        const matTotal = (pc.materials ? (pc.materials.y1 || 0) + (pc.materials.y2 || 0) + (pc.materials.y3 || 0) : 0);
+        const trvTotal = (pc.travel ? (pc.travel.y1 || 0) + (pc.travel.y2 || 0) + (pc.travel.y3 || 0) : 0);
+        const subTotal = (pc.subcontracting ? (pc.subcontracting.y1 || 0) + (pc.subcontracting.y2 || 0) + (pc.subcontracting.y3 || 0) : 0);
+        const othTotal = (pc.other ? (pc.other.y1 || 0) + (pc.other.y2 || 0) + (pc.other.y3 || 0) : 0);
+        const overhead = personnelEUR * ((pc.overheadPct || 0) / 100);
+        const partnerTotal = (personnelEUR + matTotal + trvTotal + subTotal + othTotal + overhead) / 1000; // kEUR
+
+        partnerLabels.push(p.name);
+        partnerData.push(Math.round(partnerTotal * 10) / 10);
+        partnerColors.push(p.color);
+        totalBudget += partnerTotal;
+      });
+
+      const budgetCanvas = document.getElementById('chart-partner-budget');
+      if (budgetCanvas) {
+        if (partnerBudgetChart) partnerBudgetChart.destroy();
+        partnerBudgetChart = new Chart(budgetCanvas, {
+          type: 'doughnut',
+          data: {
+            labels: partnerLabels,
+            datasets: [{
+              data: partnerData,
+              backgroundColor: partnerColors,
+              borderColor: '#fff',
+              borderWidth: 2,
+              hoverBorderWidth: 3,
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            cutout: '55%',
+            plugins: {
+              centerText: { text: totalBudget.toFixed(0), subtext: 'kEUR Total' },
+              legend: {
+                position: 'bottom',
+                labels: {
+                  font: { family: getComputedStyle(document.documentElement).getPropertyValue('--font-body').trim(), size: 11 },
+                  color: getComputedStyle(document.documentElement).getPropertyValue('--text-secondary').trim(),
+                  padding: 12,
+                  usePointStyle: true,
+                  pointStyle: 'circle',
+                }
+              },
+              tooltip: {
+                callbacks: {
+                  label: function(ctx) {
+                    const val = ctx.parsed;
+                    const pct = ((val / totalBudget) * 100).toFixed(1);
+                    return ctx.label + ': ' + val.toFixed(1) + ' kEUR (' + pct + '%)';
+                  }
+                }
+              }
+            }
+          },
+          plugins: [centerTextPlugin]
+        });
+      }
+    }
+
     function recalcBudget() {
       buildTable62();
       buildTable61();
@@ -3570,6 +3790,7 @@
       buildTable65();
       buildFullBudgetTable();
       buildCountryFullBudgetTable();
+      renderCharts();
     }
 
     // ── Excel export via SheetJS ──
@@ -3606,6 +3827,43 @@
         if (tCountryFull && tCountryFull.rows.length > 0) {
           XLSX.utils.book_append_sheet(wb, XLSX.utils.table_to_sheet(tCountryFull), 'Full Budget per Country');
         }
+
+        // Charts Data sheet
+        try {
+          let totalPMExport = 0;
+          ganttData.workPackages.forEach(wp => { wp.tasks.forEach(task => { PARTNERS.forEach(p => { totalPMExport += (pmData[task.id] && pmData[task.id][p.id]) ? pmData[task.id][p.id] : 0; }); }); });
+          const chartsDataFinal = [['WP Effort Distribution'], ['Work Package', 'PM', '%']];
+          ganttData.workPackages.forEach(wp => {
+            let wpPM = 0;
+            wp.tasks.forEach(task => { PARTNERS.forEach(p => { wpPM += (pmData[task.id] && pmData[task.id][p.id]) ? pmData[task.id][p.id] : 0; }); });
+            chartsDataFinal.push([wp.id + ': ' + wp.name, wpPM, totalPMExport > 0 ? ((wpPM / totalPMExport) * 100).toFixed(1) + '%' : '0%']);
+          });
+          chartsDataFinal.push([]);
+          chartsDataFinal.push(['Partner Budget Distribution']);
+          chartsDataFinal.push(['Partner', 'Total (kEUR)', '%']);
+          let totalBudgetExport = 0;
+          const partnerBudgets = [];
+          PARTNERS.forEach(p => {
+            let ppm = 0;
+            ganttData.workPackages.forEach(wp => { wp.tasks.forEach(task => { ppm += (pmData[task.id] && pmData[task.id][p.id]) ? pmData[task.id][p.id] : 0; }); });
+            const rate = partnerRates[p.id] || 0;
+            const pc = partnerCosts[p.id] || {};
+            const personnel = ppm * rate;
+            const mat = pc.materials ? (pc.materials.y1||0)+(pc.materials.y2||0)+(pc.materials.y3||0) : 0;
+            const trv = pc.travel ? (pc.travel.y1||0)+(pc.travel.y2||0)+(pc.travel.y3||0) : 0;
+            const sub = pc.subcontracting ? (pc.subcontracting.y1||0)+(pc.subcontracting.y2||0)+(pc.subcontracting.y3||0) : 0;
+            const oth = pc.other ? (pc.other.y1||0)+(pc.other.y2||0)+(pc.other.y3||0) : 0;
+            const overhead = personnel * ((pc.overheadPct||0)/100);
+            const total = (personnel + mat + trv + sub + oth + overhead) / 1000;
+            partnerBudgets.push({ name: p.name, total });
+            totalBudgetExport += total;
+          });
+          partnerBudgets.forEach(pb => {
+            chartsDataFinal.push([pb.name, pb.total.toFixed(1), totalBudgetExport > 0 ? ((pb.total / totalBudgetExport) * 100).toFixed(1) + '%' : '0%']);
+          });
+          const chartsSheet = XLSX.utils.aoa_to_sheet(chartsDataFinal);
+          XLSX.utils.book_append_sheet(wb, chartsSheet, 'Charts Data');
+        } catch(e) { console.warn('Charts data sheet error:', e); }
 
         XLSX.writeFile(wb, 'AION-CF_Budget_Tables.xlsx');
         toast('Budget tables exported to Excel', 'success');
