@@ -943,7 +943,7 @@
           <h2 style="font-family:var(--font-display);font-size:18px;color:var(--text);margin:0">PM Allocation by Partner</h2>
           <span id="pm-grand-total" style="font-family:var(--font-mono);font-size:14px;color:var(--accent);font-weight:700;margin-left:16px"></span>
           <div style="flex:1"></div>
-          <button class="tb-btn" onclick="pmResetToDefaults()" title="Reset IHP to defaults, clear others">Reset IHP Defaults</button>
+          <button class="tb-btn" onclick="pmResetToDefaults()" title="Reset all partners to proposal defaults">Reset to Proposal Defaults</button>
           <button class="tb-btn accent" onclick="pmExportCSV()" title="Export PM table as CSV">Export CSV</button>
         </div>
         <table class="pm-table" id="pm-table">
@@ -1210,6 +1210,14 @@
       const content = document.getElementById(`tab-${tabName}`);
       if (pill)    pill.classList.add('active');
       if (content) content.classList.add('active');
+      // Detach Gantt Firebase listener when leaving tab, re-attach when entering
+      if (tabName !== 'gantt' && ganttFirebaseListener) {
+        firebase.database().ref('gantt').off('value', ganttFirebaseListener);
+        ganttFirebaseListener = null;
+      }
+      if (tabName === 'gantt' && !ganttFirebaseListener && window.firebaseConnected) {
+        loadGanttFromFirebase();
+      }
     }
 
     document.querySelectorAll('.tab-pill').forEach(btn => {
@@ -1444,6 +1452,7 @@
       ganttUpdateUndoButtons();
       ganttRender();
       ganttRenderSidebar();
+      syncGanttToFirebase();
     }
     function ganttRedo() {
       if (!ganttRedoStack.length) return;
@@ -1453,6 +1462,7 @@
       ganttUpdateUndoButtons();
       ganttRender();
       ganttRenderSidebar();
+      syncGanttToFirebase();
     }
     function ganttUpdateUndoButtons() {
       const ub = document.getElementById('btnUndo');
@@ -1587,7 +1597,7 @@
       ganttData.phases.forEach(ph => {
         const x = LABEL_W + (ph.start - 1) * monthWidth;
         const w = (ph.end - ph.start + 1) * monthWidth;
-        svg.appendChild(svgEl('rect', { x, y: 0, width: w, height: chartH, fill: ph.color, opacity: 0.18 }));
+        svg.appendChild(svgEl('rect', { x, y: HEADER_H, width: w, height: chartH - HEADER_H, fill: ph.color, opacity: 0.18 }));
       });
 
       // 3. Phase labels
@@ -2333,7 +2343,7 @@
       ganttData.phases.forEach(ph => {
         const x = P.labelW + (ph.start - 1) * P.monthW;
         const w = (ph.end - ph.start + 1) * P.monthW;
-        svg.appendChild(svgEl('rect', { x, y: 0, width: w, height: chartH, fill: ph.color, opacity: 0.18 }));
+        svg.appendChild(svgEl('rect', { x, y: P.headerH, width: w, height: chartH - P.headerH, fill: ph.color, opacity: 0.18 }));
       });
 
       // Phase labels
@@ -2924,7 +2934,8 @@
     function listenPMData() {
       if (!window.firebaseConnected) return;
       // Detach old listener to prevent duplicates on reconnect
-      if (pmFirebaseListener) firebase.database().ref('pm').off('value', pmFirebaseListener);
+      const oldPmListener = pmFirebaseListener;
+      if (oldPmListener) firebase.database().ref('pm').off('value', oldPmListener);
       try {
         pmFirebaseListener = firebase.database().ref('pm').on('value', (snap) => {
           const fbData = snap.val();
@@ -2980,6 +2991,7 @@
       ganttData.workPackages.forEach(wp => {
         wp.tasks.forEach(task => {
           const defaults = ALL_PM_DEFAULTS[task.id] || {};
+          if (!pmData[task.id]) pmData[task.id] = {};
           PARTNERS.forEach(p => {
             pmData[task.id][p.id] = defaults[p.id] || 0;
           });
@@ -3005,7 +3017,7 @@
           console.warn('PM reset Firebase error:', err);
         }
       }
-      toast('PM reset to IHP defaults', 'success');
+      toast('PM reset to proposal defaults', 'success');
     }
 
     // ── Export PM table as CSV ──
@@ -3230,7 +3242,19 @@
     // ── Partner rates: EUR per Person-Month ──
     let partnerRates = {};
 
+    function saveRatesToLocalStorage() {
+      try { localStorage.setItem('aion-cf-rates-backup', JSON.stringify(partnerRates)); } catch(e) {}
+    }
+    function loadRatesFromLocalStorage() {
+      try {
+        const s = localStorage.getItem('aion-cf-rates-backup');
+        if (s) { partnerRates = JSON.parse(s); return true; }
+      } catch(e) {}
+      return false;
+    }
+
     function initRates() {
+      loadRatesFromLocalStorage();
       PARTNERS.forEach(p => {
         if (partnerRates[p.id] === undefined) partnerRates[p.id] = 10000;
       });
@@ -3255,7 +3279,10 @@
     }
 
     function onRateChange(partnerId, value) {
-      partnerRates[partnerId] = parseFloat(value) || 0;
+      let num = parseFloat(value) || 0;
+      if (num < 0) num = 0;
+      partnerRates[partnerId] = num;
+      saveRatesToLocalStorage();
       recalcBudget();
       if (window.firebaseConnected) {
         try {
@@ -3377,7 +3404,7 @@
 
       html += '<tr><td><strong>Total</strong></td>';
       colTotals.forEach(t => { html += '<td>' + (t > 0.005 ? t.toFixed(2) : '-') + '</td>'; });
-      html += '<td>' + grandTotal.toFixed(2) + '</td></tr></tbody>';
+      html += '<td>' + (grandTotal > 0.005 ? grandTotal.toFixed(2) : '-') + '</td></tr></tbody>';
       table.innerHTML = html;
     }
 
@@ -3410,7 +3437,7 @@
 
       html += '<tr><td><strong>Total</strong></td>';
       colTotals.forEach(t => { html += '<td>' + (t > 0.05 ? t.toFixed(1) : '-') + '</td>'; });
-      html += '<td>' + grandTotal.toFixed(1) + '</td></tr></tbody>';
+      html += '<td>' + (grandTotal > 0.05 ? grandTotal.toFixed(1) : '-') + '</td></tr></tbody>';
       table.innerHTML = html;
     }
 
@@ -3449,7 +3476,7 @@
 
       html += '<tr><td><strong>Total</strong></td>';
       colTotals.forEach(t => { html += '<td>' + (t > 0.05 ? t.toFixed(1) : '-') + '</td>'; });
-      html += '<td>' + grandTotal.toFixed(1) + '</td></tr></tbody>';
+      html += '<td>' + (grandTotal > 0.05 ? grandTotal.toFixed(1) : '-') + '</td></tr></tbody>';
       table.innerHTML = html;
     }
 
@@ -3516,6 +3543,11 @@
       initRates();
       renderRateCards();
       recalcBudget();
+      // Warn if all rates are still at default and Firebase hasn't loaded yet
+      if (!window.firebaseConnected) {
+        const allDefault = PARTNERS.every(p => partnerRates[p.id] === 10000);
+        if (allDefault) toast('Rates set to 10,000 EUR/PM default — adjust per partner', 'warning');
+      }
     }
 
     // Initialize budget on startup
