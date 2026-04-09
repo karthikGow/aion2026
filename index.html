@@ -729,32 +729,31 @@
     .budget-table .partner-dot {
       display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle;
     }
-    .chart-row {
-      display: flex;
-      gap: 24px;
-      justify-content: center;
-      flex-wrap: wrap;
-      margin-bottom: 8px;
-    }
-    .chart-container {
-      flex: 1;
-      max-width: 420px;
-      min-width: 280px;
+    .chart-compact {
+      width: 280px;
+      min-width: 240px;
+      flex-shrink: 0;
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 8px;
-      padding: 16px;
+      padding: 12px;
       box-shadow: var(--shadow-sm);
     }
-    .chart-container h4 {
+    .chart-compact h4 {
       font-family: var(--font-display);
-      font-size: 13px;
+      font-size: 12px;
       font-weight: 600;
       color: var(--text-secondary);
       text-align: center;
-      margin: 0 0 8px 0;
+      margin: 0 0 6px 0;
       letter-spacing: 0.3px;
     }
+    .budget-with-chart {
+      display: flex;
+      gap: 20px;
+      align-items: flex-start;
+    }
+    .budget-with-chart .budget-table { flex: 1; min-width: 0; }
     .rate-cards { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; }
     .rate-card {
       background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
@@ -859,8 +858,8 @@
       .budget-table th, .budget-table td { padding: 3px 5px; }
       .rate-card .partner-label { font-size: 11px; }
       .rate-input { width: 60px; }
-      .chart-row { flex-direction: column; align-items: center; }
-      .chart-container { max-width: 100%; }
+      .budget-with-chart { flex-direction: column; }
+      .chart-compact { width: 100%; min-width: 0; }
     }
 
     /* ── Print ── */
@@ -1031,6 +1030,10 @@
         <table class="pm-table" id="pm-table">
           <!-- Built dynamically by renderPMGrid() -->
         </table>
+        <div class="chart-compact" style="margin-top:20px">
+          <h4>Effort Distribution by WP</h4>
+          <canvas id="chart-wp-effort"></canvas>
+        </div>
       </div>
     </div>
 
@@ -1048,21 +1051,6 @@
         <h3>EUR per Person-Month Rates</h3>
         <div class="rate-cards" id="rate-cards">
           <!-- Built by renderRateCards() -->
-        </div>
-      </div>
-
-      <!-- Overview Charts -->
-      <div class="budget-section">
-        <h3>Overview</h3>
-        <div class="chart-row" id="chart-row">
-          <div class="chart-container">
-            <h4>Effort Distribution by WP</h4>
-            <canvas id="chart-wp-effort"></canvas>
-          </div>
-          <div class="chart-container">
-            <h4>Total Budget by Partner</h4>
-            <canvas id="chart-partner-budget"></canvas>
-          </div>
         </div>
       </div>
 
@@ -1096,10 +1084,16 @@
         <div class="cost-cards" id="cost-inputs"><!-- Built by renderCostInputs() --></div>
       </div>
 
-      <!-- Full Budget Summary -->
+      <!-- Full Budget Summary + Chart -->
       <div class="budget-section">
         <h3>Full Budget Summary per Partner (kEUR) <button class="copy-btn" onclick="copyTableHTML('budget-full')">Copy</button></h3>
-        <table class="budget-table" id="budget-full"></table>
+        <div class="budget-with-chart">
+          <table class="budget-table" id="budget-full"></table>
+          <div class="chart-compact">
+            <h4>Budget by Partner</h4>
+            <canvas id="chart-partner-budget"></canvas>
+          </div>
+        </div>
       </div>
 
       <!-- Full Budget per Country -->
