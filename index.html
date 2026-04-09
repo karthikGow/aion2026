@@ -1036,13 +1036,13 @@
 
       <!-- Table 6.4 -->
       <div class="budget-section">
-        <h3>Table 6.4: Budget per Partner per Year (kEUR) <button class="copy-btn" onclick="copyTableHTML('budget-table-64')">Copy</button></h3>
+        <h3>Table 6.4: Personnel Budget per Partner per Year (kEUR) <button class="copy-btn" onclick="copyTableHTML('budget-table-64')">Copy</button></h3>
         <table class="budget-table" id="budget-table-64"></table>
       </div>
 
       <!-- Table 6.5 -->
       <div class="budget-section">
-        <h3>Table 6.5: Budget per Country per Year (kEUR) <button class="copy-btn" onclick="copyTableHTML('budget-table-65')">Copy</button></h3>
+        <h3>Table 6.5: Personnel Budget per Country per Year (kEUR) <button class="copy-btn" onclick="copyTableHTML('budget-table-65')">Copy</button></h3>
         <table class="budget-table" id="budget-table-65"></table>
       </div>
 
@@ -3413,6 +3413,7 @@
             const tStart = task.start || 1;
             const tEnd   = task.end   || 36;
             const taskLen = tEnd - tStart + 1;
+            if (taskLen <= 0) return; // guard: corrupted task dates
             pmInYear += taskPM * (overlapMonths(tStart, tEnd, yr.start, yr.end) / taskLen);
           });
         });
